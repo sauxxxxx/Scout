@@ -774,6 +774,12 @@ input,textarea,.select-trigger,.lead-search { transition:border-color var(--moti
 .select-menu button { transition:background-color var(--motion-micro),color var(--motion-micro),padding-left var(--motion-micro) var(--ease-scout); }
 .select-menu button:hover,.select-menu button.active { padding-left:11px; }
 .select-menu button[aria-selected="true"] svg { animation:scout-pop var(--motion-standard) var(--ease-scout) both; }
+.lead-table { position:relative; overflow:visible; }
+.content:has(.lead-table) { overflow:visible; }
+.lead-table .table-row { position:relative; animation-name:scout-fade-in; }
+.lead-table .table-row:hover { transform:none; }
+.lead-table .table-row:has(.row-status-trigger[aria-expanded="true"]) { z-index:100; }
+.row-status-select:has(.row-status-trigger[aria-expanded="true"]) { z-index:101; }
 .more-filters,.bulk-bar { transform-origin:top center; animation:scout-rise-in var(--motion-standard) var(--ease-scout) both; }
 .filter-group>button,.finder-requirements button { transition:background-color var(--motion-micro),color var(--motion-micro),transform var(--motion-micro) var(--ease-scout); }
 .finder-requirements button:active { transform:scale(.96); }
