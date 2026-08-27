@@ -723,7 +723,7 @@ select { appearance:none; padding-right:30px!important; background-image:linear-
   --focus-ring:0 0 0 3px rgba(20,23,25,.12);
 }
 
-@keyframes scout-page-in { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
+@keyframes scout-page-in { from { opacity:0; } to { opacity:1; } }
 @keyframes scout-fade-in { from { opacity:0; } to { opacity:1; } }
 @keyframes scout-rise-in { from { opacity:0; transform:translateY(7px); } to { opacity:1; transform:none; } }
 @keyframes scout-menu-in { from { opacity:0; transform:translateY(-4px) scale(.985); } to { opacity:1; transform:none; } }
