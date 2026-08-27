@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { FiActivity, FiBell, FiCalendar, FiCheck, FiCheckSquare, FiChevronDown, FiChevronRight, FiColumns, FiEdit3, FiFileText, FiHome, FiMail, FiMoreHorizontal, FiPhone, FiPlus, FiSearch, FiSettings, FiTarget, FiUsers, FiX } from 'react-icons/fi';
 
 type Page = 'Overview' | 'Leads' | 'Finder' | 'Pipeline' | 'Tasks' | 'Activities';
@@ -84,16 +85,29 @@ function Heading({ title, action }:{title:string;action?:React.ReactNode}) {
   return <div className="page-head"><h1>{title}</h1>{action}</div>
 }
 
+type FloatingMenuPosition={top?:number;bottom?:number;left:number;width:number;maxHeight:number;placement:'up'|'down'};
+function useFloatingMenu(open:boolean,trigger:React.RefObject<HTMLButtonElement|null>,options:string[]) {
+  const [position,setPosition]=useState<FloatingMenuPosition|null>(null);
+  useLayoutEffect(()=>{
+    if(!open){setPosition(null);return}
+    const update=()=>{const element=trigger.current;if(!element)return;const rect=element.getBoundingClientRect();const margin=8;const gap=4;const naturalHeight=Math.min(options.length*32+8,288);const below=Math.max(0,window.innerHeight-rect.bottom-margin-gap);const above=Math.max(0,rect.top-margin-gap);const placement:FloatingMenuPosition['placement']=below<naturalHeight&&above>below?'up':'down';const available=placement==='up'?above:below;const longest=options.reduce((length,option)=>Math.max(length,option.length),0);const width=Math.max(rect.width,Math.min(220,longest*7+46));const left=Math.max(margin,Math.min(rect.left,window.innerWidth-width-margin));setPosition({top:placement==='down'?rect.bottom+gap:undefined,bottom:placement==='up'?window.innerHeight-rect.top+gap:undefined,left,width,maxHeight:Math.max(32,Math.min(naturalHeight,available)),placement})};
+    update();window.addEventListener('resize',update);window.addEventListener('scroll',update,true);return()=>{window.removeEventListener('resize',update);window.removeEventListener('scroll',update,true)}
+  },[open,options,trigger]);
+  return position;
+}
+
 function CustomSelect({value,options,onChange,placeholder,label}:{value:string;options:string[];onChange:(value:string)=>void;placeholder?:string;label?:string}) {
-  const [open,setOpen]=useState(false); const [active,setActive]=useState(Math.max(0,options.indexOf(value)));
+  const [open,setOpen]=useState(false); const [active,setActive]=useState(Math.max(0,options.indexOf(value))); const trigger=useRef<HTMLButtonElement>(null); const position=useFloatingMenu(open,trigger,options);
   const choose=(option:string)=>{onChange(option);setOpen(false)};
   const keys=(e:React.KeyboardEvent)=>{if(e.key==='Escape')setOpen(false);if(e.key==='ArrowDown'){e.preventDefault();setOpen(true);setActive(i=>Math.min(options.length-1,i+1))}if(e.key==='ArrowUp'){e.preventDefault();setOpen(true);setActive(i=>Math.max(0,i-1))}if(e.key==='Enter'&&open){e.preventDefault();choose(options[active])}};
-  return <div className="custom-select" onKeyDown={keys} onBlur={e=>!e.currentTarget.contains(e.relatedTarget)&&setOpen(false)}>{label&&<span className="select-label">{label}</span>}<button type="button" className="select-trigger" aria-haspopup="listbox" aria-expanded={open} onClick={()=>setOpen(v=>!v)}><span>{value||placeholder||'Select'}</span><FiChevronDown/></button>{open&&<div className="select-menu" role="listbox">{options.map((option,i)=><button type="button" role="option" aria-selected={option===value} className={i===active?'active':''} onMouseEnter={()=>setActive(i)} onClick={()=>choose(option)} key={option}><span>{option}</span>{option===value&&<FiCheck/>}</button>)}</div>}</div>
+  const menu=open&&position&&<div className={`select-menu floating-select-menu placement-${position.placement}`} style={{top:position.top,bottom:position.bottom,left:position.left,width:position.width,maxHeight:position.maxHeight}} role="listbox" onMouseDown={e=>e.preventDefault()}>{options.map((option,i)=><button type="button" role="option" aria-selected={option===value} className={i===active?'active':''} onMouseEnter={()=>setActive(i)} onClick={()=>choose(option)} key={option}><span>{option}</span>{option===value&&<FiCheck/>}</button>)}</div>;
+  return <div className="custom-select" onKeyDown={keys} onBlur={e=>!e.currentTarget.contains(e.relatedTarget)&&setOpen(false)}>{label&&<span className="select-label">{label}</span>}<button ref={trigger} type="button" className="select-trigger" aria-haspopup="listbox" aria-expanded={open} onClick={()=>setOpen(v=>!v)}><span>{value||placeholder||'Select'}</span><FiChevronDown/></button>{menu&&createPortal(menu,document.body)}</div>
 }
 
 function StatusSelect({value,onChange}:{value:string;onChange:(value:string)=>void}) {
-  const [open,setOpen]=useState(false); const options=['New','Contacted','Interested','Follow-up','Proposal','Negotiation','Won','Lost']; const statusClass=(name:string)=>name.toLowerCase().replace('-','');
-  return <div className="row-status-select" onClick={e=>e.stopPropagation()} onBlur={e=>!e.currentTarget.contains(e.relatedTarget)&&setOpen(false)}><button type="button" className="row-status-trigger" aria-haspopup="listbox" aria-expanded={open} onClick={()=>setOpen(v=>!v)}><i className={`status-dot ${statusClass(value)}`}/><span>{value}</span><FiChevronDown/></button>{open&&<div className="select-menu status-menu" role="listbox">{options.map(option=><button type="button" role="option" aria-selected={option===value} onClick={()=>{onChange(option);setOpen(false)}} key={option}><span><i className={`status-dot ${statusClass(option)}`}/>{option}</span>{option===value&&<FiCheck/>}</button>)}</div>}</div>
+  const [open,setOpen]=useState(false); const options=useMemo(()=>['New','Contacted','Interested','Follow-up','Proposal','Negotiation','Won','Lost'],[]); const trigger=useRef<HTMLButtonElement>(null); const position=useFloatingMenu(open,trigger,options); const statusClass=(name:string)=>name.toLowerCase().replace('-','');
+  const menu=open&&position&&<div className={`select-menu status-menu floating-select-menu placement-${position.placement}`} style={{top:position.top,bottom:position.bottom,left:position.left,width:position.width,maxHeight:position.maxHeight}} role="listbox" onMouseDown={e=>e.preventDefault()}>{options.map(option=><button type="button" role="option" aria-selected={option===value} onClick={()=>{onChange(option);setOpen(false)}} key={option}><span><i className={`status-dot ${statusClass(option)}`}/>{option}</span>{option===value&&<FiCheck/>}</button>)}</div>;
+  return <div className="row-status-select" onClick={e=>e.stopPropagation()} onBlur={e=>!e.currentTarget.contains(e.relatedTarget)&&setOpen(false)}><button ref={trigger} type="button" className="row-status-trigger" aria-haspopup="listbox" aria-expanded={open} onClick={()=>setOpen(v=>!v)}><i className={`status-dot ${statusClass(value)}`}/><span>{value}</span><FiChevronDown/></button>{menu&&createPortal(menu,document.body)}</div>
 }
 
 function Overview({setPage,leads}:{setPage:(p:Page)=>void;leads:Lead[]}) {
