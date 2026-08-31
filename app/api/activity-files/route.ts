@@ -1,0 +1,19 @@
+import { activityFiles } from '@/lib/activity-store';
+
+export const dynamic = 'force-dynamic';
+
+export async function POST(request:Request){
+  const form=await request.formData(); const file=form.get('file');
+  if(!(file instanceof File))return Response.json({error:'A file is required.'},{status:400});
+  if(file.size>10*1024*1024)return Response.json({error:'Files must be 10 MB or smaller.'},{status:413});
+  const safe=file.name.replace(/[^a-zA-Z0-9._-]+/g,'-'); const key=`activities/${Date.now()}-${crypto.randomUUID()}-${safe}`;
+  await activityFiles().put(key,file.stream(),{httpMetadata:{contentType:file.type||'application/octet-stream'},customMetadata:{originalName:file.name}});
+  return Response.json({key,name:file.name,url:`/api/activity-files?key=${encodeURIComponent(key)}`});
+}
+
+export async function GET(request:Request){
+  const key=new URL(request.url).searchParams.get('key'); if(!key)return new Response('Missing file key',{status:400});
+  const object=await activityFiles().get(key); if(!object)return new Response('File not found',{status:404});
+  const headers=new Headers(); object.writeHttpMetadata(headers); headers.set('etag',object.httpEtag); headers.set('content-disposition',`inline; filename="${object.customMetadata?.originalName||'attachment'}"`);
+  return new Response(object.body,{headers});
+}
