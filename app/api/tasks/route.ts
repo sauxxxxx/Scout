@@ -1,0 +1,49 @@
+import { authenticateRequest } from '@/lib/auth';
+import { mapTask } from '@/lib/workspace-store';
+import { taskInputSchema, validationError } from '@/lib/validation';
+
+export const dynamic = 'force-dynamic';
+
+type TaskInput = ReturnType<typeof taskInputSchema.parse>;
+const taskColumns = 'title=?,lead=?,lead_id=?,owner=?,priority=?,due=?,time=?,type=?,notes=?,status=?,reminder=?,recurrence=?,outcome=?';
+const values = (task: TaskInput, leadId: string) => [task.title, task.lead, leadId, task.owner, task.priority, task.due, task.time, task.type, task.notes, task.status, task.reminder ?? null, task.recurrence ?? null, task.outcome ?? null];
+async function linkedLead(db:D1Database,workspaceId:string,task:TaskInput){const row=await db.prepare('SELECT id FROM leads WHERE workspace_id=? AND (id=? OR name=?) LIMIT 1').bind(workspaceId,task.leadId||'',task.lead).first<{id:string}>();return row?.id}
+
+export async function POST(request: Request) {
+  const auth = await authenticateRequest(request, 'records:write');
+  if (!auth.ok) return auth.response;
+  const parsed = taskInputSchema.safeParse(await request.json());
+  if (!parsed.success) return validationError(parsed.error);
+  const task = parsed.data;
+  const uid = task.uid || crypto.randomUUID();
+  const leadId=await linkedLead(auth.db,auth.session.workspace.id,task);if(!leadId)return Response.json({error:'The selected lead does not exist in this workspace.'},{status:422});
+  await auth.db.prepare(`INSERT INTO tasks (uid,workspace_id,id,version,title,lead,lead_id,owner,priority,due,time,type,notes,status,reminder,recurrence,outcome,created_at,updated_at) VALUES (?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`)
+    .bind(uid, auth.session.workspace.id, task.id, ...values(task,leadId)).run();
+  const row = await auth.db.prepare('SELECT * FROM tasks WHERE uid=? AND workspace_id=?').bind(uid, auth.session.workspace.id).first<Record<string, unknown>>();
+  return Response.json({ task: mapTask(row!) }, { status: 201 });
+}
+
+export async function PATCH(request: Request) {
+  const auth = await authenticateRequest(request, 'records:write');
+  if (!auth.ok) return auth.response;
+  const parsed = taskInputSchema.safeParse(await request.json());
+  if (!parsed.success) return validationError(parsed.error);
+  const task = parsed.data;
+  if (!task.uid || !task.version) return Response.json({ error: 'Stable ID and version are required.' }, { status: 400 });
+  const leadId=await linkedLead(auth.db,auth.session.workspace.id,task);if(!leadId)return Response.json({error:'The selected lead does not exist in this workspace.'},{status:422});
+  const result = await auth.db.prepare(`UPDATE tasks SET ${taskColumns},version=version+1,updated_at=CURRENT_TIMESTAMP WHERE uid=? AND workspace_id=? AND version=?`)
+    .bind(...values(task,leadId), task.uid, auth.session.workspace.id, task.version).run();
+  if (!result.meta.changes) return Response.json({ error: 'This task changed elsewhere. Refresh and try again.' }, { status: 409 });
+  const row = await auth.db.prepare('SELECT * FROM tasks WHERE uid=? AND workspace_id=?').bind(task.uid, auth.session.workspace.id).first<Record<string, unknown>>();
+  return Response.json({ task: mapTask(row!) });
+}
+
+export async function DELETE(request: Request) {
+  const auth = await authenticateRequest(request, 'records:write');
+  if (!auth.ok) return auth.response;
+  const uid = new URL(request.url).searchParams.get('id');
+  if (!uid) return Response.json({ error: 'Stable task ID is required.' }, { status: 400 });
+  const result = await auth.db.prepare('DELETE FROM tasks WHERE uid=? AND workspace_id=?').bind(uid, auth.session.workspace.id).run();
+  if (!result.meta.changes) return Response.json({ error: 'Task not found.' }, { status: 404 });
+  return Response.json({ deleted: uid });
+}

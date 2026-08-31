@@ -951,6 +951,43 @@ input[type="checkbox"]:checked { transform:scale(1.06); }
 .quick-lead-status>div:last-child strong { font-size:18px!important; font-weight:600; }
 .lead-preview-footer { display:flex; justify-content:flex-end; padding:10px 30px 28px; }
 .lead-preview-footer .text-link { display:flex; align-items:center; gap:5px; }
+.top-actions .avatar { border:0; cursor:pointer; }
+.auth-screen { min-height:100vh; display:grid; place-content:center; justify-items:center; gap:14px; background:#fff; color:var(--ink); text-align:center; }
+.auth-screen img { width:56px; height:56px; object-fit:contain; }
+.auth-screen h1 { margin:4px 0 0; font-size:24px; }
+.auth-screen p { margin:0; color:#747d80; font-size:12px; }
+.auth-screen .primary { min-height:38px; display:inline-flex; align-items:center; padding:0 18px; color:#fff; text-decoration:none; }
+.settings-intro { margin:-8px 0 24px; color:#737c7f; font-size:11px; }
+.team-list { width:100%; }
+.team-head,.team-row { display:grid; grid-template-columns:minmax(260px,1.7fr) minmax(140px,.7fr) minmax(90px,.5fr) 70px; align-items:center; gap:18px; min-height:58px; padding:0 12px; }
+.team-head { min-height:36px; color:#8a9295; font-size:8px; text-transform:uppercase; letter-spacing:.08em; }
+.team-row:nth-child(odd) { background:#f6f6f6; }
+.team-user { display:flex; align-items:center; gap:10px; }
+.team-user .avatar { flex:0 0 auto; width:28px; height:28px; color:#445053; background:#e6e9e9; }
+.team-user strong,.team-user small { display:block; }
+.team-user strong { font-size:10px; }
+.team-user small,.team-row>span { margin-top:3px; color:#7d8689; font-size:8px; }
+.team-row .custom-select { max-width:130px; }
+.team-row .select-trigger { border:0; background:#efefef; }
+.role-label { color:#515a5d; font-size:10px; text-transform:capitalize; }
+.access-guide { margin-top:38px; }
+.access-guide h2 { margin:0 0 16px; font-size:14px; }
+.access-guide>div { display:grid; grid-template-columns:repeat(4,1fr); gap:24px; }
+.access-guide p { margin:0; }
+.access-guide strong,.access-guide span { display:block; }
+.access-guide strong { font-size:10px; }
+.access-guide span { margin-top:6px; color:#7a8386; font-size:9px; line-height:1.45; }
+.modal-backdrop { position:fixed; z-index:1100; inset:0; display:grid; place-items:center; padding:20px; background:#17262d66; animation:scout-fade-in var(--motion-standard) linear both; }
+.role-modal { width:min(460px,100%); background:#fff; box-shadow:0 22px 60px rgba(15,24,28,.2); }
+.role-modal>header,.role-modal>footer { min-height:64px; display:flex; align-items:center; justify-content:space-between; padding:0 24px; }
+.role-modal>header h2 { margin:0; font-size:17px; }
+.role-modal>header button { border:0; background:transparent; }
+.role-modal .modal-body { display:grid; gap:20px; padding:10px 24px 24px; }
+.role-modal .modal-body label { display:grid; gap:7px; color:#747d80; font-size:9px; }
+.role-modal .modal-body input { height:38px; padding:0; border:0; border-bottom:1px solid #d7dbdc; outline:0; font:inherit; font-size:11px; }
+.role-modal .select-trigger { border:0; border-bottom:1px solid #d7dbdc; border-radius:0; }
+.role-modal>footer { justify-content:flex-end; gap:18px; background:#fff; }
+@media(max-width:700px){.team-head{display:none}.team-row{grid-template-columns:1fr auto;padding:12px}.team-row>span{display:none}.access-guide>div{grid-template-columns:1fr 1fr}}
 @media(max-width:700px){ .activity-viewbar{flex-direction:column;gap:14px;margin-bottom:10px}.activity-toolbar{align-items:stretch}.activity-timeline>section{grid-template-columns:1fr}.activity-timeline>section>h2{padding:16px 0 7px}.activity-timeline>section>div:before{left:80px}.activity-timeline-entry{grid-template-columns:68px 24px minmax(0,1fr) 16px}.activity-timeline-time{padding-right:5px}.activity-editor{max-height:calc(100vh - 12px)} }
 
 @media(prefers-reduced-motion:reduce) {
