@@ -10,6 +10,8 @@ export const taskStatuses = ['Open', 'Backlog', 'Scheduled', 'In progress', 'Wai
 export const leadInputSchema = z.object({
   id: recordId.optional(),
   version: z.number().int().positive().optional(),
+  companyId: recordId.optional(),
+  primaryContactId: recordId.optional(),
   name: z.string().trim().min(1).max(160),
   industry: z.string().trim().min(1).max(120),
   city: z.string().trim().min(1).max(120),
@@ -29,6 +31,25 @@ export const leadInputSchema = z.object({
   archived: z.boolean().optional(),
 }).strict();
 
+export const companyInputSchema = z.object({
+  id: recordId.optional(), version:z.number().int().positive().optional(), name:z.string().trim().min(1).max(160),
+  industry:z.string().trim().max(120), city:z.string().trim().max(120), phone:z.string().trim().max(80),
+  email:z.union([z.literal(''),z.email().max(254)]), website:z.union([z.literal(''),z.url().max(2000)]).optional().nullable(),
+  owner:z.string().trim().min(1).max(120), archived:z.boolean().optional(),
+}).strict();
+
+export const contactInputSchema = z.object({
+  id:recordId.optional(), version:z.number().int().positive().optional(), companyId:recordId,
+  name:z.string().trim().min(1).max(160), title:optionalText, email:z.union([z.literal(''),z.email().max(254)]),
+  phone:z.string().trim().max(80), isPrimary:z.boolean().optional(), archived:z.boolean().optional(),
+}).strict();
+
+export const opportunityInputSchema = z.object({
+  id:recordId.optional(), version:z.number().int().positive().optional(), companyId:recordId, leadId:recordId.optional(), primaryContactId:recordId.optional(),
+  name:z.string().trim().min(1).max(200), stage:z.enum(leadStatuses), value:z.number().finite().nonnegative(), probability:z.number().int().min(0).max(100),
+  closeDate:optionalText, owner:z.string().trim().min(1).max(120), priority:z.enum(['Low','Medium','High']), outcome:optionalText, archived:z.boolean().optional(),
+}).strict();
+
 export const taskInputSchema = z.object({
   uid: recordId.optional(),
   id: z.number().int().nonnegative(),
@@ -36,6 +57,9 @@ export const taskInputSchema = z.object({
   title: z.string().trim().min(1).max(200),
   lead: z.string().trim().min(1).max(160),
   leadId: recordId.optional(),
+  companyId: recordId.optional(),
+  contactId: recordId.optional(),
+  opportunityId: recordId.optional(),
   owner: z.string().trim().min(1).max(120),
   priority: z.enum(['Low', 'Medium', 'High']),
   due: z.string().trim().min(1).max(80),
@@ -54,6 +78,9 @@ export const activityInputSchema = z.object({
   version: z.number().int().positive().optional(),
   lead: z.string().trim().min(1).max(160),
   leadId: recordId.optional(),
+  companyId: recordId.optional(),
+  contactId: recordId.optional(),
+  opportunityId: recordId.optional(),
   type: z.string().trim().min(1).max(80),
   detail: z.string().trim().min(1).max(2000),
   time: z.string().trim().min(1).max(120),

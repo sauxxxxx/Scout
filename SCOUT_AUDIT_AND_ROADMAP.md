@@ -12,7 +12,7 @@ Scout is currently a strong interactive prototype, but not yet a production-read
   - [x] Suggestion: use individual create/update/delete endpoints with optimistic concurrency.
 
 - [x] **Lead names are record identifiers:** Renaming a business could break task, activity, and opportunity relationships.
-  - [ ] Suggestion: give every lead, contact, task, activity, and opportunity an immutable ID.
+  - [x] Suggestion: give every lead, contact, task, activity, and opportunity an immutable ID.
 
 - [x] **Limited server validation:** Most input rules exist only in the interface.
   - [ ] Suggestion: validate every mutation on the server, including URLs, statuses, file metadata, dates, and ownership.
@@ -74,12 +74,12 @@ Suggested redesign:
 
 Functional foundations exist, but the workflow remains partial:
 
-- [ ] Business and contact information cannot be edited after creation.
+- [x] Business and contact information cannot be edited after creation.
 - [ ] Leads cannot be archived, deleted, restored, or merged.
 - [ ] Duplicate detection only checks simple name, city, and phone matches.
 - [ ] Email and phone validation is weak.
-- [ ] No company/contact separation.
-- [ ] No multiple contacts per business.
+- [x] No company/contact separation.
+- [x] No multiple contacts per business.
 - [ ] No tags, sources, custom fields, or consent information.
 - [ ] Lead scoring is static; there is no scoring model or explanation.
 - [ ] “Recently added” depends on display text such as “Today,” not a real creation timestamp.
@@ -103,7 +103,7 @@ Suggested redesign:
 
 - [ ] Make the lead drawer the central workspace with **Overview, Activity, Tasks, Opportunities, and Files** tabs.
 - [ ] Allow inline editing with explicit save states.
-- [ ] Separate companies and contacts.
+- [x] Separate companies and contacts.
 - [ ] Add archive, merge, duplicate review, and restore workflows.
 - [ ] Route every quick action through the same Activities and Tasks services.
 - [ ] Add server pagination and stable lead URLs.
@@ -143,10 +143,10 @@ Suggested redesign:
 Functional Kanban movement exists, but the underlying model is incomplete:
 
 - [ ] Pipeline sidebar items—All pipeline, My pipeline, Forecast—do nothing.
-- [ ] An opportunity is stored inside a lead instead of being its own record.
-- [ ] A lead can only have one practical opportunity.
+- [x] An opportunity is stored inside a lead instead of being its own record.
+- [x] A lead can only have one practical opportunity.
 - [ ] Opportunity name cannot be edited independently.
-- [ ] “Add opportunity” modifies an existing lead rather than creating a proper opportunity.
+- [x] “Add opportunity” modifies an existing lead rather than creating a proper opportunity.
 - [ ] Forecast view does not exist.
 - [ ] No monthly/quarterly forecast buckets.
 - [ ] No sales targets, quotas, or forecast categories.
@@ -161,8 +161,8 @@ Functional Kanban movement exists, but the underlying model is incomplete:
 
 Suggested redesign:
 
-- [ ] Create a dedicated Opportunity entity linked to a lead.
-- [ ] Support multiple opportunities per business.
+- [x] Create a dedicated Opportunity entity linked to a lead.
+- [x] Support multiple opportunities per business.
 - [ ] Add List, Kanban, and Forecast views.
 - [ ] Add configurable stages, probabilities, currency, close dates, and loss reasons.
 - [ ] Add an opportunity drawer with activity, contacts, tasks, files, and stage history.
@@ -331,7 +331,7 @@ Suggested architecture:
 ## Recommended priority
 
 1. [x] **Foundation:** authentication, users, roles, stable IDs, safe record APIs, validation, tests.
-2. [ ] **Core CRM model:** separate contacts, companies, and opportunities.
+2. [x] **Core CRM model:** separate contacts, companies, and opportunities.
 3. [ ] **Repair current workflows:** Overview, Lead actions, Task dates/recurrence, and Pipeline views.
 4. [ ] **Real Finder:** external data, persistent searches, provenance, and background jobs.
 5. [ ] **Communication:** email, calls, proposals, calendar integration, and notifications.

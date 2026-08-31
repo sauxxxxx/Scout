@@ -1,4 +1,4 @@
-import { createActivitiesLeadIndex, createActivitiesStatusIndex, createActivitiesTable, createLeadsTable, createTasksLeadStatusIndex, createTasksTable } from '@/db/schema';
+import { createActivitiesLeadIndex, createActivitiesStatusIndex, createActivitiesTable, createCompaniesTable, createContactsTable, createLeadsTable, createOpportunitiesTable, createTasksLeadStatusIndex, createTasksTable } from '@/db/schema';
 
 export const DEFAULT_WORKSPACE_ID = 'scout-default';
 
@@ -57,19 +57,22 @@ export async function ensureFoundationSchema(db: D1Database) {
     db.prepare(createActivitiesTable),
     db.prepare(createLeadsTable),
     db.prepare(createTasksTable),
+    db.prepare(createCompaniesTable),
+    db.prepare(createContactsTable),
+    db.prepare(createOpportunitiesTable),
     db.prepare(createActivitiesStatusIndex),
     db.prepare(createActivitiesLeadIndex),
     db.prepare(createTasksLeadStatusIndex),
   ]);
 
   await addColumns(db, 'leads', {
-    id: 'TEXT', workspace_id: 'TEXT', version: 'INTEGER NOT NULL DEFAULT 1', created_at: 'TEXT',
+    id: 'TEXT', workspace_id: 'TEXT', company_id: 'TEXT', primary_contact_id: 'TEXT', version: 'INTEGER NOT NULL DEFAULT 1', created_at: 'TEXT',
   });
   await addColumns(db, 'tasks', {
-    uid: 'TEXT', workspace_id: 'TEXT', lead_id: 'TEXT', version: 'INTEGER NOT NULL DEFAULT 1', created_at: 'TEXT',
+    uid: 'TEXT', workspace_id: 'TEXT', lead_id: 'TEXT', company_id: 'TEXT', contact_id: 'TEXT', opportunity_id: 'TEXT', version: 'INTEGER NOT NULL DEFAULT 1', created_at: 'TEXT',
   });
   await addColumns(db, 'activities', {
-    uid: 'TEXT', workspace_id: 'TEXT', lead_id: 'TEXT', related_task_uid: 'TEXT', version: 'INTEGER NOT NULL DEFAULT 1',
+    uid: 'TEXT', workspace_id: 'TEXT', lead_id: 'TEXT', company_id: 'TEXT', contact_id: 'TEXT', opportunity_id: 'TEXT', related_task_uid: 'TEXT', version: 'INTEGER NOT NULL DEFAULT 1',
   });
 
   await db.prepare('INSERT OR IGNORE INTO workspaces (id, name) VALUES (?, ?)').bind(DEFAULT_WORKSPACE_ID, 'Sales workspace').run();
@@ -89,5 +92,31 @@ export async function ensureFoundationSchema(db: D1Database) {
     db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_activities_stable_id ON activities(uid)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_activities_workspace ON activities(workspace_id, updated_at)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_memberships_workspace ON workspace_memberships(workspace_id, role)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_companies_workspace_name ON companies(workspace_id, name)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_contacts_company ON contacts(workspace_id, company_id, archived)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_opportunities_stage ON opportunities(workspace_id, stage, archived)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_opportunities_company ON opportunities(workspace_id, company_id)'),
   ]);
+  await backfillCoreCrm(db);
+  await db.prepare('PRAGMA optimize').run();
+}
+
+export async function backfillCoreCrm(db:D1Database){
+  const leads=await db.prepare("SELECT * FROM leads WHERE company_id IS NULL OR primary_contact_id IS NULL OR (trim(COALESCE(opportunity,''))!='' AND NOT EXISTS (SELECT 1 FROM opportunities WHERE opportunities.workspace_id=leads.workspace_id AND opportunities.lead_id=leads.id))").all<Record<string,unknown>>();
+  for(const lead of leads.results){
+    const workspaceId=String(lead.workspace_id||DEFAULT_WORKSPACE_ID);const leadId=String(lead.id);let company=lead.company_id?await db.prepare('SELECT id FROM companies WHERE workspace_id=? AND id=?').bind(workspaceId,String(lead.company_id)).first<{id:string}>():null;if(!company)company=await db.prepare('SELECT id FROM companies WHERE workspace_id=? AND lower(name)=lower(?)').bind(workspaceId,String(lead.name)).first<{id:string}>();
+    if(!company){company={id:crypto.randomUUID()};await db.prepare('INSERT INTO companies (id,workspace_id,name,industry,city,phone,email,owner,archived) VALUES (?,?,?,?,?,?,?,?,?)').bind(company.id,workspaceId,String(lead.name),String(lead.industry||''),String(lead.city||''),String(lead.phone||''),String(lead.email||''),String(lead.owner||''),Number(lead.archived||0)).run()}
+    let contact=lead.primary_contact_id?await db.prepare('SELECT id FROM contacts WHERE workspace_id=? AND id=? AND company_id=?').bind(workspaceId,String(lead.primary_contact_id),company.id).first<{id:string}>():null;if(!contact)contact=await db.prepare('SELECT id FROM contacts WHERE workspace_id=? AND company_id=? AND is_primary=1').bind(workspaceId,company.id).first<{id:string}>();
+    if(!contact){contact={id:crypto.randomUUID()};await db.prepare('INSERT INTO contacts (id,workspace_id,company_id,name,email,phone,is_primary) VALUES (?,?,?,?,?,?,1)').bind(contact.id,workspaceId,company.id,String(lead.contact||'Primary contact'),String(lead.email||''),String(lead.phone||'')).run()}
+    await db.prepare('UPDATE leads SET company_id=?,primary_contact_id=? WHERE id=? AND workspace_id=?').bind(company.id,contact.id,leadId,workspaceId).run();
+    const opportunityName=String(lead.opportunity||'').trim();if(opportunityName){const existing=await db.prepare('SELECT id FROM opportunities WHERE workspace_id=? AND lead_id=? LIMIT 1').bind(workspaceId,leadId).first<{id:string}>();if(!existing)await db.prepare('INSERT INTO opportunities (id,workspace_id,company_id,lead_id,primary_contact_id,name,stage,value,probability,close_date,owner,priority,archived) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(crypto.randomUUID(),workspaceId,company.id,leadId,contact.id,opportunityName,String(lead.status||'New'),Number(lead.value||0),Number(lead.probability??lead.score??0),lead.close_date||null,String(lead.owner||''),String(lead.priority||'Medium'),Number(lead.archived||0)).run()}
+  }
+  await db.batch([
+    db.prepare('UPDATE tasks SET company_id=(SELECT company_id FROM leads WHERE leads.id=tasks.lead_id),contact_id=(SELECT primary_contact_id FROM leads WHERE leads.id=tasks.lead_id),opportunity_id=(SELECT id FROM opportunities WHERE opportunities.lead_id=tasks.lead_id LIMIT 1) WHERE company_id IS NULL'),
+    db.prepare('UPDATE activities SET company_id=(SELECT company_id FROM leads WHERE leads.id=activities.lead_id),contact_id=(SELECT primary_contact_id FROM leads WHERE leads.id=activities.lead_id),opportunity_id=(SELECT id FROM opportunities WHERE opportunities.lead_id=activities.lead_id LIMIT 1) WHERE company_id IS NULL'),
+  ]);
+}
+
+export async function syncLeadCoreCrm(db:D1Database,workspaceId:string,leadId:string){
+  void workspaceId;void leadId;await backfillCoreCrm(db);
 }
