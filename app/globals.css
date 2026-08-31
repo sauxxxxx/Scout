@@ -772,7 +772,7 @@ input,textarea,.select-trigger,.lead-search { transition:border-color var(--moti
 .select-trigger svg,.row-status-trigger svg,.filter-group>button svg { transition:transform var(--motion-standard) var(--ease-scout); }
 .select-trigger[aria-expanded="true"] svg,.row-status-trigger[aria-expanded="true"] svg,.filter-group>button.active svg { transform:rotate(180deg); }
 .select-menu { transform-origin:top center; animation:scout-menu-in var(--motion-standard) var(--ease-scout) both; }
-.floating-select-menu { position:fixed; z-index:1000; right:auto!important; min-width:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; }
+.floating-select-menu { position:fixed; z-index:1000; right:auto!important; min-width:0; overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; color:var(--ink); font-family:'Inter','Helvetica Neue',Arial,sans-serif; font-size:10px; line-height:1.2; scrollbar-width:thin; }
 .floating-select-menu.placement-up { top:auto!important; transform-origin:bottom center; animation-name:scout-menu-up-in; }
 .floating-select-menu.placement-down { bottom:auto!important; }
 .select-menu button { transition:background-color var(--motion-micro),color var(--motion-micro),padding-left var(--motion-micro) var(--ease-scout); }
