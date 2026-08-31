@@ -910,6 +910,8 @@ input[type="checkbox"]:checked { transform:scale(1.06); }
 .activity-timeline-content>p { margin:8px 0 0; color:#3f474a; font-size:10px; line-height:1.5; }
 .activity-timeline-content>footer { display:flex; flex-wrap:wrap; gap:5px 12px; margin-top:9px; }
 .activity-timeline-content>footer span { display:inline-flex; align-items:center; gap:4px; color:#858c8f; font-size:8px; }
+.activity-timeline-content>footer button { display:inline-flex; align-items:center; padding:0; border:0; background:transparent; color:#788184; font-size:8px; }
+.activity-timeline-content>footer button:hover { color:var(--ink); text-decoration:underline; }
 .activity-timeline-entry>svg { align-self:center; color:#a5aaac; transition:transform var(--motion-micro) var(--ease-scout); }
 .activity-timeline-entry:hover>svg { transform:translateX(3px); }
 .activity-pagination { min-height:48px; display:flex; align-items:center; justify-content:space-between; margin-top:8px; color:#858c8f; font-size:9px; }
@@ -932,6 +934,19 @@ input[type="checkbox"]:checked { transform:scale(1.06); }
 .activity-document:hover { color:var(--ink); text-decoration:underline; }
 .activity-system-detail { display:flex; flex-direction:column; gap:7px; padding:14px 0; }
 .activity-system-detail strong { font-size:10px; font-weight:500; }.activity-system-detail span { color:#7d8588; font-size:9px; }
+.activity-date-range { display:flex; justify-content:flex-end; gap:16px; padding:10px 0 4px; }
+.activity-date-range label { display:flex; align-items:center; gap:8px; color:#7d8588; font-size:9px; }
+.activity-date-range input { height:30px; padding:0 4px; border:0; border-bottom:1px solid #d7dbdc; background:transparent; color:var(--ink); font:inherit; }
+.activity-retention { margin:10px 0 0; color:#7d8588; font-size:9px; }
+.activity-detail-drawer { display:flex; flex-direction:column; }
+.activity-detail-drawer .activity-links { display:grid; flex:0 0 auto; }
+.activity-drawer-body { flex:1; overflow-y:auto; }
+.activity-detail-drawer .activity-file+.field-clear,.activity-detail-drawer label+.field-clear { align-self:flex-start; }
+.field-clear { width:max-content; margin-top:-8px; }
+.activity-drawer-footer { min-height:70px; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:14px 30px 22px; }
+.activity-drawer-footer>button:last-child { margin-left:auto; }
+.activity-drawer-footer .danger-text { border:0; background:transparent; }
+.activity-drawer-footer .primary { min-height:34px; }
 .quick-lead-status strong { display:flex; align-items:center; gap:7px; font-size:11px!important; font-weight:500; }
 .quick-lead-status>div:last-child strong { font-size:18px!important; font-weight:600; }
 .lead-preview-footer { display:flex; justify-content:flex-end; padding:10px 30px 28px; }

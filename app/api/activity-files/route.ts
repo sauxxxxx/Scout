@@ -17,3 +17,8 @@ export async function GET(request:Request){
   const headers=new Headers(); object.writeHttpMetadata(headers); headers.set('etag',object.httpEtag); headers.set('content-disposition',`inline; filename="${object.customMetadata?.originalName||'attachment'}"`);
   return new Response(object.body,{headers});
 }
+
+export async function DELETE(request:Request){
+  const key=new URL(request.url).searchParams.get('key');if(!key||!key.startsWith('activities/'))return Response.json({error:'A valid activity file key is required.'},{status:400});
+  await activityFiles().delete(key);return Response.json({deleted:key});
+}
