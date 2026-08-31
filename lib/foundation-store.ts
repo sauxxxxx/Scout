@@ -1,4 +1,5 @@
 import { createActivitiesLeadIndex, createActivitiesStatusIndex, createActivitiesTable, createCompaniesTable, createContactsTable, createLeadsTable, createOpportunitiesTable, createTasksLeadStatusIndex, createTasksTable } from '@/db/schema';
+import { taskDueIso } from '@/lib/task-dates';
 
 export const DEFAULT_WORKSPACE_ID = 'scout-default';
 
@@ -69,7 +70,7 @@ export async function ensureFoundationSchema(db: D1Database) {
     id: 'TEXT', workspace_id: 'TEXT', company_id: 'TEXT', primary_contact_id: 'TEXT', version: 'INTEGER NOT NULL DEFAULT 1', created_at: 'TEXT',
   });
   await addColumns(db, 'tasks', {
-    uid: 'TEXT', workspace_id: 'TEXT', lead_id: 'TEXT', company_id: 'TEXT', contact_id: 'TEXT', opportunity_id: 'TEXT', version: 'INTEGER NOT NULL DEFAULT 1', created_at: 'TEXT',
+    uid: 'TEXT', workspace_id: 'TEXT', lead_id: 'TEXT', company_id: 'TEXT', contact_id: 'TEXT', opportunity_id: 'TEXT', due_at: 'TEXT', version: 'INTEGER NOT NULL DEFAULT 1', created_at: 'TEXT',
   });
   await addColumns(db, 'activities', {
     uid: 'TEXT', workspace_id: 'TEXT', lead_id: 'TEXT', company_id: 'TEXT', contact_id: 'TEXT', opportunity_id: 'TEXT', related_task_uid: 'TEXT', version: 'INTEGER NOT NULL DEFAULT 1',
@@ -96,8 +97,11 @@ export async function ensureFoundationSchema(db: D1Database) {
     db.prepare('CREATE INDEX IF NOT EXISTS idx_contacts_company ON contacts(workspace_id, company_id, archived)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_opportunities_stage ON opportunities(workspace_id, stage, archived)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_opportunities_company ON opportunities(workspace_id, company_id)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_tasks_workspace_due_at ON tasks(workspace_id, due_at, status)'),
   ]);
   await backfillCoreCrm(db);
+  await db.prepare("UPDATE tasks SET due_at=CASE WHEN due='Today' THEN date('now') WHEN due='Tomorrow' THEN date('now','+1 day') WHEN due='Overdue' THEN date('now','-1 day') ELSE due_at END WHERE due_at IS NULL").run();
+  const undatedTasks=await db.prepare('SELECT uid,due FROM tasks WHERE due_at IS NULL').all<{uid:string;due:string}>();for(const task of undatedTasks.results)await db.prepare('UPDATE tasks SET due_at=? WHERE uid=?').bind(taskDueIso(task.due),task.uid).run();
   await db.prepare('PRAGMA optimize').run();
 }
 

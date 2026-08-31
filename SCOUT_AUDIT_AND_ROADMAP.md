@@ -51,14 +51,14 @@ Suggestions:
 
 Mostly visual or simulated:
 
-- [ ] Pipeline movement chart is hardcoded.
-- [ ] Activity Volume tab does nothing.
-- [ ] “30 days” does nothing.
-- [ ] Chart overflow menu does nothing.
-- [ ] Overview sidebar items—My day, Team pulse, Campaigns—do nothing.
-- [ ] “View all 16” uses a hardcoded count.
-- [ ] Follow-ups come from lead text rather than the task database.
-- [ ] Completing a follow-up only changes temporary Overview state.
+- [x] Pipeline movement chart is hardcoded.
+- [x] Activity Volume tab does nothing.
+- [x] “30 days” does nothing.
+- [x] Chart overflow menu does nothing.
+- [x] Overview sidebar items—My day, Team pulse, Campaigns—do nothing.
+- [x] “View all 16” uses a hardcoded count.
+- [x] Follow-ups come from lead text rather than the task database.
+- [x] Completing a follow-up only changes temporary Overview state.
 - [ ] No date comparison, drill-down, or team filtering.
 
 Suggested redesign:
@@ -66,9 +66,9 @@ Suggested redesign:
 - [ ] Use real KPI data: pipeline value, weighted forecast, conversion, activities, overdue work, and won revenue.
 - [ ] Replace the fake movement chart with actual stage-history data.
 - [ ] Make every metric drill into its source records.
-- [ ] Use the actual task list for “Today.”
+- [x] Use the actual task list for “Today.”
 - [ ] Add a real date-range and comparison control.
-- [ ] Either implement the Overview sidebar views or remove them.
+- [x] Either implement the Overview sidebar views or remove them.
 
 ## Leads
 
@@ -93,7 +93,7 @@ Functional foundations exist, but the workflow remains partial:
 
 Disconnected quick actions:
 
-- [ ] Follow-up updates lead text but does not always create a task and reminder.
+- [x] Follow-up updates lead text but does not always create a task and reminder.
 - [ ] Proposal does not create or attach a proposal document.
 - [ ] Log call does not connect to telephony.
 - [ ] Email cannot be sent or tracked.
@@ -105,7 +105,7 @@ Suggested redesign:
 - [ ] Allow inline editing with explicit save states.
 - [x] Separate companies and contacts.
 - [ ] Add archive, merge, duplicate review, and restore workflows.
-- [ ] Route every quick action through the same Activities and Tasks services.
+- [x] Route every quick action through the same Activities and Tasks services.
 - [ ] Add server pagination and stable lead URLs.
 
 ## Lead Finder
@@ -142,12 +142,12 @@ Suggested redesign:
 
 Functional Kanban movement exists, but the underlying model is incomplete:
 
-- [ ] Pipeline sidebar items—All pipeline, My pipeline, Forecast—do nothing.
+- [x] Pipeline sidebar items—All pipeline, My pipeline, Forecast—do nothing.
 - [x] An opportunity is stored inside a lead instead of being its own record.
 - [x] A lead can only have one practical opportunity.
 - [ ] Opportunity name cannot be edited independently.
 - [x] “Add opportunity” modifies an existing lead rather than creating a proper opportunity.
-- [ ] Forecast view does not exist.
+- [x] Forecast view does not exist.
 - [ ] No monthly/quarterly forecast buckets.
 - [ ] No sales targets, quotas, or forecast categories.
 - [ ] Pipeline stages cannot be configured.
@@ -173,11 +173,11 @@ Suggested redesign:
 Many task interactions work, but several important parts are incomplete:
 
 - [ ] The page tabs and sidebar filters are duplicated and can become disconnected.
-- [ ] Recurrence values are stored but recurring tasks are never generated.
+- [x] Recurrence values are stored but recurring tasks are never generated.
 - [ ] Reminders work only while Scout is open.
 - [ ] No durable notification inbox.
 - [ ] No browser, email, mobile, or calendar notification delivery.
-- [ ] Dates are stored as labels such as “Today” and “Tomorrow,” causing rollover and timezone problems.
+- [x] Dates are stored as labels such as “Today” and “Tomorrow,” causing rollover and timezone problems.
 - [ ] No real task duration or end time.
 - [ ] No all-day control.
 - [ ] No calendar conflict detection.
@@ -332,7 +332,7 @@ Suggested architecture:
 
 1. [x] **Foundation:** authentication, users, roles, stable IDs, safe record APIs, validation, tests.
 2. [x] **Core CRM model:** separate contacts, companies, and opportunities.
-3. [ ] **Repair current workflows:** Overview, Lead actions, Task dates/recurrence, and Pipeline views.
+3. [x] **Repair current workflows:** Overview, Lead actions, Task dates/recurrence, and Pipeline views.
 4. [ ] **Real Finder:** external data, persistent searches, provenance, and background jobs.
 5. [ ] **Communication:** email, calls, proposals, calendar integration, and notifications.
 6. [ ] **Automation and reporting:** only after the underlying event history is reliable.

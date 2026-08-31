@@ -63,6 +63,7 @@ export const taskInputSchema = z.object({
   owner: z.string().trim().min(1).max(120),
   priority: z.enum(['Low', 'Medium', 'High']),
   due: z.string().trim().min(1).max(80),
+  dueAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
   type: z.string().trim().min(1).max(80),
   notes: z.string().trim().max(2000),

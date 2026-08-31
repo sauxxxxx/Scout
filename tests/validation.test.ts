@@ -16,9 +16,10 @@ describe('record validation', () => {
   });
 
   it('requires a valid task time and status', () => {
-    const task = { id: 1, title: 'Call lead', lead: 'ABC Dental Clinic', owner: 'Shaun', priority: 'High', due: 'Today', time: '10:30', type: 'Call', notes: '', status: 'Scheduled' };
+    const task = { id: 1, title: 'Call lead', lead: 'ABC Dental Clinic', owner: 'Shaun', priority: 'High', due: 'Today', dueAt: '2026-08-31', time: '10:30', type: 'Call', notes: '', status: 'Scheduled' };
     expect(taskInputSchema.safeParse(task).success).toBe(true);
     expect(taskInputSchema.safeParse({ ...task, time: '25:70' }).success).toBe(false);
+    expect(taskInputSchema.safeParse({ ...task, dueAt: 'Aug 31' }).success).toBe(false);
   });
 
   it('validates activities and workspace invitations', () => {

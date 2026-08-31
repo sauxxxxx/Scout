@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   owner TEXT NOT NULL,
   priority TEXT NOT NULL,
   due TEXT NOT NULL,
+  due_at TEXT,
   time TEXT NOT NULL,
   type TEXT NOT NULL,
   notes TEXT NOT NULL,
