@@ -903,6 +903,8 @@ input[type="checkbox"]:checked { transform:scale(1.06); }
 .activity-timeline-content header strong { font-size:10px; font-weight:600; }
 .activity-timeline-content header button { padding:0; border:0; background:transparent; color:#687174; font-size:9px; }
 .activity-timeline-content header button:hover { color:var(--ink); text-decoration:underline; }
+.activity-lead-button { padding:0; border:0; background:transparent; color:var(--ink); font:inherit; font-weight:600; text-align:left; }
+.activity-lead-button:hover { text-decoration:underline; }
 .activity-timeline-content header em { padding:3px 6px; border-radius:3px; background:#eef0f0; color:#737b7e; font-size:7px; font-style:normal; }
 .activity-timeline-content>small { display:block; margin-top:7px; color:#687174; font-size:9px; font-weight:500; }
 .activity-timeline-content>p { margin:8px 0 0; color:#3f474a; font-size:10px; line-height:1.5; }
@@ -930,6 +932,10 @@ input[type="checkbox"]:checked { transform:scale(1.06); }
 .activity-document:hover { color:var(--ink); text-decoration:underline; }
 .activity-system-detail { display:flex; flex-direction:column; gap:7px; padding:14px 0; }
 .activity-system-detail strong { font-size:10px; font-weight:500; }.activity-system-detail span { color:#7d8588; font-size:9px; }
+.quick-lead-status strong { display:flex; align-items:center; gap:7px; font-size:11px!important; font-weight:500; }
+.quick-lead-status>div:last-child strong { font-size:18px!important; font-weight:600; }
+.lead-preview-footer { display:flex; justify-content:flex-end; padding:10px 30px 28px; }
+.lead-preview-footer .text-link { display:flex; align-items:center; gap:5px; }
 @media(max-width:700px){ .activity-viewbar{flex-direction:column;gap:14px;margin-bottom:10px}.activity-toolbar{align-items:stretch}.activity-timeline>section{grid-template-columns:1fr}.activity-timeline>section>h2{padding:16px 0 7px}.activity-timeline>section>div:before{left:80px}.activity-timeline-entry{grid-template-columns:68px 24px minmax(0,1fr) 16px}.activity-timeline-time{padding-right:5px}.activity-editor{max-height:calc(100vh - 12px)} }
 
 @media(prefers-reduced-motion:reduce) {
