@@ -485,6 +485,7 @@ select { appearance:none; padding-right:30px!important; background-image:linear-
 .finder-result-row strong,.finder-result-row small { display:block; }
 .finder-result-row small { margin-top:5px; color:#8a9194; font-size:9px; }
 .finder-result-row>span:nth-child(4) { display:flex; align-items:center; }
+.finder-result-row a,.finder-preview a { color:inherit; text-decoration:underline; text-underline-offset:2px; }
 .fit-dot { width:7px; height:7px; flex:0 0 auto; margin-right:8px; border-radius:50%; background:#bdc4c7; }
 .fit-dot.fit-high { background:#b5a7df; }.fit-dot.fit-medium { background:#8fc4e8; }.fit-dot.fit-low { background:#e3bd69; }
 .finder-score strong { font-size:12px; }
@@ -499,6 +500,14 @@ select { appearance:none; padding-right:30px!important; background-image:linear-
 .finder-preview-score strong { font-size:13px; font-weight:600; }
 .finder-preview-score div:first-child strong { font-size:22px; }
 .finder-assessment p { margin:0; color:#555d60; font-size:11px; line-height:1.6; }
+.finder-assessment small { display:block; margin-top:10px; color:#8a9194; font-size:9px; }
+.finder-warning { margin:12px 0 0; padding:9px 12px; background:#fbf6e8; color:#745d2e; font-size:10px; }
+.finder-warning button { float:right; padding:0; border:0; background:transparent; color:inherit; font:inherit; text-decoration:underline; }
+.finder-provenance { display:flex; flex-direction:column; gap:0; }
+.finder-provenance>a { display:flex; justify-content:space-between; padding:9px 0; text-decoration:none; }
+.finder-provenance>a+a { border-top:1px solid #edf0ef; }
+.finder-provenance strong { text-transform:capitalize; font-size:10px; }
+.finder-provenance span { color:#7d8588; font-size:9px; }
 .finder-preview .close-actions { padding-top:10px; }
 .finder-preview .close-actions .primary { border:0; background:var(--ink); color:#fff; }
 .finder-import-modal>header { align-items:flex-start; padding-top:18px; }
@@ -533,7 +542,7 @@ select { appearance:none; padding-right:30px!important; background-image:linear-
 .finder-history-row small { margin-top:5px; color:#8a9194; font-size:9px; }
 .finder-history-row>span:nth-child(6) { display:flex; align-items:center; }
 .history-status { width:7px; height:7px; margin-right:7px; border-radius:50%; background:#b7bec1; }
-.history-status.complete { background:#8fc4e8; }.history-status.running { background:#e3bd69; }.history-status.saved { background:#b5a7df; }
+.history-status.complete { background:#8fc4e8; }.history-status.running,.history-status.queued { background:#e3bd69; }.history-status.saved { background:#b5a7df; }.history-status.partial { background:#d6b069; }.history-status.failed { background:#d99494; }.history-status.cancelled { background:#b7bec1; }
 .history-actions { display:flex; align-items:center; justify-content:flex-end; gap:10px; }
 .history-actions button { padding:0; border:0; background:transparent; color:#555d60; font-size:9px; white-space:nowrap; }
 .history-actions button:last-child { width:24px; height:24px; display:grid; place-items:center; color:#9aa1a3; font-size:13px; }

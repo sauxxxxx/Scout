@@ -1,4 +1,4 @@
-import { createActivitiesLeadIndex, createActivitiesStatusIndex, createActivitiesTable, createCompaniesTable, createContactsTable, createLeadsTable, createOpportunitiesTable, createTasksLeadStatusIndex, createTasksTable } from '@/db/schema';
+import { createActivitiesLeadIndex, createActivitiesStatusIndex, createActivitiesTable, createCompaniesTable, createContactsTable, createFinderResultsIndex, createFinderResultsTable, createFinderSearchesIndex, createFinderSearchesTable, createLeadsTable, createOpportunitiesTable, createTasksLeadStatusIndex, createTasksTable } from '@/db/schema';
 import { taskDueIso } from '@/lib/task-dates';
 
 export const DEFAULT_WORKSPACE_ID = 'scout-default';
@@ -61,9 +61,13 @@ export async function ensureFoundationSchema(db: D1Database) {
     db.prepare(createCompaniesTable),
     db.prepare(createContactsTable),
     db.prepare(createOpportunitiesTable),
+    db.prepare(createFinderSearchesTable),
+    db.prepare(createFinderResultsTable),
     db.prepare(createActivitiesStatusIndex),
     db.prepare(createActivitiesLeadIndex),
     db.prepare(createTasksLeadStatusIndex),
+    db.prepare(createFinderSearchesIndex),
+    db.prepare(createFinderResultsIndex),
   ]);
 
   await addColumns(db, 'leads', {

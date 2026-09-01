@@ -107,6 +107,32 @@ export const memberInputSchema = z.object({
   role: z.enum(workspaceRoles),
 }).strict();
 
+export const finderRequirements = ['Phone', 'Website', 'Email', 'Social'] as const;
+
+export const finderSearchSchema = z.object({
+  action: z.enum(['run', 'save']),
+  searchId: recordId.optional(),
+  industry: z.string().trim().min(2).max(120).optional(),
+  location: z.string().trim().min(2).max(160).optional(),
+  targetCount: z.number().int().min(1).max(60).optional(),
+  requirements: z.array(z.enum(finderRequirements)).max(finderRequirements.length).optional(),
+}).strict().superRefine((value, context) => {
+  if (value.searchId) return;
+  if (!value.industry) context.addIssue({ code: 'custom', path: ['industry'], message: 'Industry is required.' });
+  if (!value.location) context.addIssue({ code: 'custom', path: ['location'], message: 'Location is required.' });
+  if (!value.targetCount) context.addIssue({ code: 'custom', path: ['targetCount'], message: 'Lead count is required.' });
+});
+
+export const finderImportSchema = z.object({
+  action: z.literal('import'),
+  searchId: recordId,
+  resultIds: z.array(recordId).min(1).max(60),
+  owner: z.string().trim().min(1).max(120),
+  priority: z.enum(['Low', 'Medium', 'High']),
+  status: z.enum(['New', 'Contacted', 'Interested']),
+  followUpDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+}).strict();
+
 export function validationError(error: z.ZodError) {
   return Response.json({ error: 'Validation failed.', fields: z.flattenError(error).fieldErrors }, { status: 422 });
 }

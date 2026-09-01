@@ -112,30 +112,30 @@ Suggested redesign:
 
 This is the largest simulated feature:
 
-- [ ] Search results always come from a hardcoded list.
-- [ ] Industry, location, lead count, and required-information options do not change the data returned.
-- [ ] Search progress is a timer animation rather than real work.
-- [ ] Phone, email, website, and social information are not verified.
-- [ ] Sources are labels rather than linked evidence.
-- [ ] Fit scores are hardcoded.
-- [ ] Saved searches and campaign history are not persisted.
-- [ ] Navigating away can reset Finder state.
-- [ ] Re-running a search returns the same sample businesses.
-- [ ] Result count is not respected.
+- [x] Search results always come from a hardcoded list.
+- [x] Industry, location, lead count, and required-information options do not change the data returned.
+- [x] Search progress is a timer animation rather than real work.
+- [x] Phone, email, website, and social information are not verified.
+- [x] Sources are labels rather than linked evidence.
+- [x] Fit scores are hardcoded.
+- [x] Saved searches and campaign history are not persisted.
+- [x] Navigating away can reset Finder state.
+- [x] Re-running a search returns the same sample businesses.
+- [x] Result count is not respected.
 - [ ] No server pagination.
-- [ ] No background search jobs.
-- [ ] Imported leads do not consistently generate import activities or first-follow-up tasks.
+- [x] No background search jobs.
+- [x] Imported leads do not consistently generate import activities or first-follow-up tasks.
 - [ ] Search deletion has no confirmation or recovery.
-- [ ] “Campaigns” currently means search history—it is not a campaign workflow.
+- [x] “Campaigns” currently means search history—it is not a campaign workflow.
 - [ ] No email sequence, audience, message, launch, or performance tracking.
 
 Suggested redesign:
 
-- [ ] Connect Finder to a real business-data provider.
-- [ ] Show source provenance and verification dates.
-- [ ] Persist search jobs, criteria, results, and imports.
+- [x] Connect Finder to a real business-data provider.
+- [x] Show source provenance and verification dates.
+- [x] Persist search jobs, criteria, results, and imports.
 - [ ] Add pagination, enrichment status, retry, and partial-result handling.
-- [ ] Rename Campaigns to **Search history** until an actual outbound campaign system exists.
+- [x] Rename Campaigns to **Search history** until an actual outbound campaign system exists.
 - [ ] If campaigns are desired, build them separately with audience, sequence, scheduling, delivery, replies, and reporting.
 
 ## Pipeline
@@ -333,7 +333,7 @@ Suggested architecture:
 1. [x] **Foundation:** authentication, users, roles, stable IDs, safe record APIs, validation, tests.
 2. [x] **Core CRM model:** separate contacts, companies, and opportunities.
 3. [x] **Repair current workflows:** Overview, Lead actions, Task dates/recurrence, and Pipeline views.
-4. [ ] **Real Finder:** external data, persistent searches, provenance, and background jobs.
+4. [x] **Real Finder:** external data, persistent searches, provenance, and background jobs.
 5. [ ] **Communication:** email, calls, proposals, calendar integration, and notifications.
 6. [ ] **Automation and reporting:** only after the underlying event history is reliable.
 7. [ ] **Final redesign pass:** responsive navigation, accessibility, empty states, and component cleanup.
