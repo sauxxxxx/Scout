@@ -4,8 +4,8 @@ import vinext from 'vinext';
 import { defineConfig } from 'vite';
 import hostingConfig from './.openai/hosting.json';
 
-const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
-  '00000000-0000-4000-8000-000000000000';
+const SCOUT_D1_DATABASE_ID =
+  '2432f6c6-851b-4097-9e0d-d7f2a1e5ca82';
 
 const { d1, r2 } = hostingConfig;
 
@@ -13,14 +13,20 @@ const { d1, r2 } = hostingConfig;
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === 'seatbelt';
 
 const localBindingConfig = {
+  name: 'scout',
   main: './worker.ts',
   compatibility_flags: ['nodejs_compat'],
+  vars: {
+    GEMINI_MODEL: 'gemini-3.1-flash-lite',
+    FINDER_AI_MONTHLY_BUDGET_USD: '2',
+    FINDER_AI_MAX_CANDIDATES: '20',
+  },
   d1_databases: d1
     ? [
         {
           binding: d1,
-          database_name: 'site-creator-d1',
-          database_id: SITE_CREATOR_PLACEHOLDER_DATABASE_ID,
+          database_name: 'scout-db',
+          database_id: SCOUT_D1_DATABASE_ID,
         },
       ]
     : [],
@@ -28,7 +34,7 @@ const localBindingConfig = {
     ? [
         {
           binding: r2,
-          bucket_name: 'site-creator-r2',
+          bucket_name: 'scout-files',
         },
       ]
     : [],
