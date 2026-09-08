@@ -13,7 +13,7 @@ const { d1, r2 } = hostingConfig;
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === 'seatbelt';
 
 const localBindingConfig = {
-  main: 'vinext/server/app-router-entry',
+  main: './worker.ts',
   compatibility_flags: ['nodejs_compat'],
   d1_databases: d1
     ? [
@@ -32,6 +32,10 @@ const localBindingConfig = {
         },
       ]
     : [],
+  queues: {
+    producers: [{ binding: 'FINDER_QUEUE', queue: 'scout-finder' }],
+    consumers: [{ queue: 'scout-finder', max_batch_size: 1, max_retries: 3, dead_letter_queue: 'scout-finder-dlq' }],
+  },
 };
 
 export default defineConfig(async () => {

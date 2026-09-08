@@ -133,6 +133,12 @@ export const finderImportSchema = z.object({
   followUpDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 }).strict();
 
+export const finderAiRetrySchema = z.object({
+  action: z.literal('retry-ai'),
+  searchId: recordId,
+  resultId: recordId,
+}).strict();
+
 export function validationError(error: z.ZodError) {
   return Response.json({ error: 'Validation failed.', fields: z.flattenError(error).fieldErrors }, { status: 422 });
 }

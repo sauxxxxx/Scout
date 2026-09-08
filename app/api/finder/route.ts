@@ -1,13 +1,23 @@
 import { env, waitUntil } from 'cloudflare:workers';
 import { authenticateRequest } from '@/lib/auth';
-import { mapFinderResult, mapFinderSearch, processFinderJob } from '@/lib/finder-store';
+import { finderAiUsage, mapFinderResult, mapFinderSearch, processFinderMessage, type FinderJobMessage } from '@/lib/finder-store';
+import { finderRuntimeConfig, type FinderEnv } from '@/lib/finder-runtime';
 import { syncLeadCoreCrm } from '@/lib/foundation-store';
 import { mapLead } from '@/lib/workspace-store';
-import { finderImportSchema, finderSearchSchema, validationError } from '@/lib/validation';
+import { finderAiRetrySchema, finderImportSchema, finderSearchSchema, validationError } from '@/lib/validation';
 
 export const dynamic = 'force-dynamic';
 
-const googlePlacesKey = () => (env as unknown as { GOOGLE_PLACES_API_KEY?: string }).GOOGLE_PLACES_API_KEY;
+const runtimeEnv = () => env as unknown as FinderEnv;
+const runtimeConfig = () => finderRuntimeConfig(runtimeEnv());
+
+async function dispatchFinderJob(db: D1Database, message: FinderJobMessage) {
+  const queue = runtimeEnv().FINDER_QUEUE;
+  if (queue) {
+    try { await queue.send(message); return; } catch { /* Fall through to the local development path. */ }
+  }
+  waitUntil(processFinderMessage(db, message, runtimeConfig()));
+}
 
 async function finderPayload(db: D1Database, workspaceId: string, id: string) {
   const [searchRow, resultRows] = await db.batch([
@@ -15,7 +25,7 @@ async function finderPayload(db: D1Database, workspaceId: string, id: string) {
     db.prepare('SELECT * FROM finder_results WHERE search_id=? AND workspace_id=? ORDER BY score DESC,name').bind(id, workspaceId),
   ]);
   const row = searchRow.results[0] as Record<string, unknown> | undefined;
-  return row ? { search: mapFinderSearch(row), results: (resultRows.results as Record<string, unknown>[]).map(mapFinderResult) } : null;
+  return row ? { search: mapFinderSearch(row), results: (resultRows.results as Record<string, unknown>[]).map(mapFinderResult), aiUsage: await finderAiUsage(db, workspaceId, runtimeConfig().aiMonthlyBudgetUsd) } : null;
 }
 
 export async function GET(request: Request) {
@@ -23,6 +33,10 @@ export async function GET(request: Request) {
   if (!auth.ok) return auth.response;
   const id = new URL(request.url).searchParams.get('id');
   if (id) {
+    await auth.db.batch([
+      auth.db.prepare("UPDATE finder_results SET ai_status='failed',ai_error='AI assessment was interrupted and can be retried.',updated_at=CURRENT_TIMESTAMP WHERE search_id=? AND workspace_id=? AND ai_status='running' AND updated_at < datetime('now','-2 minutes')").bind(id, auth.session.workspace.id),
+      auth.db.prepare("UPDATE finder_ai_usage SET status='failed',reserved_microusd=0,updated_at=CURRENT_TIMESTAMP WHERE search_id=? AND workspace_id=? AND status='reserved' AND updated_at < datetime('now','-2 minutes')").bind(id, auth.session.workspace.id),
+    ]);
     const payload = await finderPayload(auth.db, auth.session.workspace.id, id);
     if (!payload) return Response.json({ error: 'Finder search not found.' }, { status: 404 });
     if (payload.search.status === 'Running' && Date.now() - new Date(payload.search.updatedAt.replace(' ', 'T') + 'Z').getTime() > 90_000) {
@@ -30,11 +44,11 @@ export async function GET(request: Request) {
       payload.search.status = 'Queued';
       payload.search.stage = 'Resuming';
     }
-    if (payload.search.status === 'Queued') waitUntil(processFinderJob(auth.db, auth.session.workspace.id, id, googlePlacesKey()));
+    if (payload.search.status === 'Queued') await dispatchFinderJob(auth.db, { kind: 'search', workspaceId: auth.session.workspace.id, searchId: id });
     return Response.json(payload);
   }
   const rows = await auth.db.prepare('SELECT * FROM finder_searches WHERE workspace_id=? ORDER BY created_at DESC LIMIT 100').bind(auth.session.workspace.id).all<Record<string, unknown>>();
-  return Response.json({ searches: rows.results.map(mapFinderSearch) });
+  return Response.json({ searches: rows.results.map(mapFinderSearch), aiUsage: await finderAiUsage(auth.db, auth.session.workspace.id, runtimeConfig().aiMonthlyBudgetUsd) });
 }
 
 async function importResults(request: Request, body: unknown) {
@@ -75,6 +89,13 @@ async function importResults(request: Request, body: unknown) {
       VALUES (?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`)
       .bind(leadId, auth.session.workspace.id, company.id, contactId, result.name, result.industry, result.city, input.status, result.score, input.owner, 'Imported from Finder', next, result.phone, result.email, contactId ? 'Public business contact' : '', input.priority, result.opportunity).run();
     await syncLeadCoreCrm(auth.db, auth.session.workspace.id, leadId);
+    const opportunity = await auth.db.prepare('SELECT id FROM opportunities WHERE workspace_id=? AND lead_id=? LIMIT 1').bind(auth.session.workspace.id, leadId).first<{ id: string }>();
+    if (opportunity && ['complete', 'cached'].includes(result.aiStatus)) {
+      const assessment = { classification: result.aiClassification, icpMatch: result.aiIcpMatch, fitScore: result.aiScore, confidence: result.aiConfidence, explanation: result.aiExplanation, opportunitySignals: result.aiOpportunitySignals, concerns: result.aiConcerns, recommendedNextAction: result.aiRecommendedAction, evidenceReferences: result.aiEvidenceReferences, model: result.aiModel, analyzedAt: result.aiAnalyzedAt };
+      await auth.db.prepare(`INSERT INTO opportunity_finder_assessments (id,workspace_id,opportunity_id,finder_result_id,assessment_json,provenance_json) VALUES (?,?,?,?,?,?)
+        ON CONFLICT(finder_result_id) DO UPDATE SET opportunity_id=excluded.opportunity_id,assessment_json=excluded.assessment_json,provenance_json=excluded.provenance_json,updated_at=CURRENT_TIMESTAMP`)
+        .bind(crypto.randomUUID(), auth.session.workspace.id, opportunity.id, result.id, JSON.stringify(assessment), JSON.stringify(result.provenance)).run();
+    }
     await auth.db.prepare(`INSERT INTO tasks (uid,workspace_id,id,title,lead,lead_id,company_id,contact_id,owner,priority,due,due_at,time,type,notes,status,reminder,recurrence,version,created_at,updated_at)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`)
       .bind(crypto.randomUUID(), auth.session.workspace.id, nextTaskId++, 'Initial follow-up', result.name, leadId, company.id, contactId, input.owner, input.priority, input.followUpDate, input.followUpDate, '09:00', 'Call', `Imported from ${result.provider}.`, 'Scheduled', '15 minutes before', 'None').run();
@@ -96,6 +117,15 @@ export async function POST(request: Request) {
   if ((body as { action?: string })?.action === 'import') return importResults(request, body);
   const auth = await authenticateRequest(request, 'records:write');
   if (!auth.ok) return auth.response;
+  if ((body as { action?: string })?.action === 'retry-ai') {
+    const retry = finderAiRetrySchema.safeParse(body);
+    if (!retry.success) return validationError(retry.error);
+    const result = await auth.db.prepare("UPDATE finder_results SET ai_status='pending',ai_error=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=? AND search_id=? AND workspace_id=? AND ai_status='failed'").bind(retry.data.resultId, retry.data.searchId, auth.session.workspace.id).run();
+    if (!result.meta.changes) return Response.json({ error: 'Only failed AI assessments can be retried.' }, { status: 409 });
+    await auth.db.prepare("DELETE FROM finder_ai_usage WHERE result_id=? AND workspace_id=? AND status='failed'").bind(retry.data.resultId, auth.session.workspace.id).run();
+    await dispatchFinderJob(auth.db, { kind: 'ai', workspaceId: auth.session.workspace.id, searchId: retry.data.searchId, resultId: retry.data.resultId });
+    return Response.json(await finderPayload(auth.db, auth.session.workspace.id, retry.data.searchId), { status: 202 });
+  }
   const parsed = finderSearchSchema.safeParse(body);
   if (!parsed.success) return validationError(parsed.error);
   const input = parsed.data;
@@ -104,8 +134,8 @@ export async function POST(request: Request) {
     const existing = await auth.db.prepare('SELECT id FROM finder_searches WHERE id=? AND workspace_id=?').bind(id, auth.session.workspace.id).first<{ id: string }>();
     if (!existing) return Response.json({ error: 'Finder search not found.' }, { status: 404 });
     await auth.db.batch([
-      auth.db.prepare('DELETE FROM finder_results WHERE search_id=? AND workspace_id=?').bind(id, auth.session.workspace.id),
-      auth.db.prepare("UPDATE finder_searches SET status='Queued',progress=2,stage='Queued',found_count=0,error=NULL,started_at=NULL,completed_at=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?").bind(id, auth.session.workspace.id),
+      auth.db.prepare("UPDATE finder_results SET ai_status=CASE WHEN ai_status IN ('failed','budget_limited','skipped') THEN 'pending' ELSE ai_status END,ai_error=NULL,updated_at=CURRENT_TIMESTAMP WHERE search_id=? AND workspace_id=?").bind(id, auth.session.workspace.id),
+      auth.db.prepare("UPDATE finder_searches SET status='Queued',progress=2,stage='Queued',error=NULL,started_at=NULL,completed_at=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?").bind(id, auth.session.workspace.id),
     ]);
   } else {
     id = crypto.randomUUID();
@@ -115,7 +145,7 @@ export async function POST(request: Request) {
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).bind(id, auth.session.workspace.id, auth.session.user.id, name, input.industry, input.location, input.targetCount, JSON.stringify(input.requirements || []), status, status === 'Queued' ? 2 : 0, status === 'Queued' ? 'Queued' : 'Ready', input.action === 'save' ? 1 : 0).run();
   }
   const payload = await finderPayload(auth.db, auth.session.workspace.id, id);
-  if (input.action === 'run') waitUntil(processFinderJob(auth.db, auth.session.workspace.id, id, googlePlacesKey()));
+  if (input.action === 'run') await dispatchFinderJob(auth.db, { kind: 'search', workspaceId: auth.session.workspace.id, searchId: id });
   return Response.json(payload, { status: input.action === 'run' ? 202 : 201 });
 }
 

@@ -184,6 +184,27 @@ CREATE TABLE IF NOT EXISTS finder_results (
   score_reason TEXT NOT NULL,
   opportunity TEXT NOT NULL,
   provenance_json TEXT NOT NULL DEFAULT '[]',
+  website_summary TEXT NOT NULL DEFAULT '',
+  rule_score INTEGER NOT NULL DEFAULT 0,
+  rule_score_reason TEXT NOT NULL DEFAULT '',
+  ai_status TEXT NOT NULL DEFAULT 'pending',
+  ai_model TEXT,
+  ai_classification TEXT,
+  ai_icp_match TEXT,
+  ai_score INTEGER,
+  ai_confidence TEXT,
+  ai_explanation TEXT,
+  ai_opportunity_signals_json TEXT NOT NULL DEFAULT '[]',
+  ai_concerns_json TEXT NOT NULL DEFAULT '[]',
+  ai_recommended_action TEXT,
+  ai_evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+  ai_input_hash TEXT,
+  ai_prompt_tokens INTEGER NOT NULL DEFAULT 0,
+  ai_output_tokens INTEGER NOT NULL DEFAULT 0,
+  ai_estimated_cost_microusd INTEGER NOT NULL DEFAULT 0,
+  ai_error TEXT,
+  ai_analyzed_at TEXT,
+  ai_attempts INTEGER NOT NULL DEFAULT 0,
   fetched_at TEXT NOT NULL,
   verified_at TEXT NOT NULL,
   imported_lead_id TEXT,
@@ -202,3 +223,33 @@ export const createFinderResultsIndex = `
 CREATE INDEX IF NOT EXISTS idx_finder_results_search_score
 ON finder_results(workspace_id, search_id, score DESC)
 `;
+
+export const createFinderAiCacheTable = `
+CREATE TABLE IF NOT EXISTS finder_ai_cache (
+  workspace_id TEXT NOT NULL, input_hash TEXT NOT NULL, model TEXT NOT NULL,
+  assessment_json TEXT NOT NULL, prompt_tokens INTEGER NOT NULL DEFAULT 0,
+  output_tokens INTEGER NOT NULL DEFAULT 0, estimated_cost_microusd INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (workspace_id, input_hash, model)
+)`;
+
+export const createFinderAiUsageTable = `
+CREATE TABLE IF NOT EXISTS finder_ai_usage (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, month TEXT NOT NULL, search_id TEXT NOT NULL,
+  result_id TEXT NOT NULL, input_hash TEXT NOT NULL, model TEXT NOT NULL, request_id TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL, reserved_microusd INTEGER NOT NULL DEFAULT 0, actual_microusd INTEGER NOT NULL DEFAULT 0,
+  prompt_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+)`;
+
+export const createOpportunityFinderAssessmentsTable = `
+CREATE TABLE IF NOT EXISTS opportunity_finder_assessments (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, opportunity_id TEXT NOT NULL,
+  finder_result_id TEXT NOT NULL UNIQUE, assessment_json TEXT NOT NULL, provenance_json TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (opportunity_id) REFERENCES opportunities(id) ON DELETE CASCADE,
+  FOREIGN KEY (finder_result_id) REFERENCES finder_results(id) ON DELETE RESTRICT
+)`;
+
+export const createFinderAiUsageIndex = `CREATE INDEX IF NOT EXISTS idx_finder_ai_usage_workspace_month ON finder_ai_usage(workspace_id, month, status)`;
+export const createOpportunityFinderAssessmentsIndex = `CREATE INDEX IF NOT EXISTS idx_opportunity_finder_assessments_opportunity ON opportunity_finder_assessments(workspace_id, opportunity_id)`;
