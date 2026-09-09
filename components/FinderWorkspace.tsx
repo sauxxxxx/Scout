@@ -24,6 +24,7 @@ import {
   FiZap,
 } from 'react-icons/fi';
 import type { Lead, Page } from '@/app/page';
+import { useViewState } from '@/lib/client-view-cache';
 
 type FinderStatus = 'Saved' | 'Queued' | 'Running' | 'Complete' | 'Partial' | 'Failed' | 'Cancelled';
 type FinderSearch = {
@@ -115,24 +116,24 @@ function elapsedBetween(startValue?: string, endValue?: string) {
 }
 
 export function FinderWorkspace({ notify, leads, onImportedLeads, setPage, finderView, setFinderView, onBreadcrumbChange }: Props) {
-  const [criteria, setCriteria] = useState({ industry: 'Dental clinics', location: 'Cebu City', count: '20' });
-  const [requirements, setRequirements] = useState(['Phone']);
-  const [searches, setSearches] = useState<FinderSearch[]>([]);
-  const [activeSearch, setActiveSearch] = useState<FinderSearch | null>(null);
-  const [results, setResults] = useState<FinderResult[]>([]);
+  const [criteria, setCriteria] = useViewState('finder.criteria', { industry: 'Dental clinics', location: 'Cebu City', count: '20' });
+  const [requirements, setRequirements] = useViewState('finder.requirements', ['Phone']);
+  const [searches, setSearches] = useViewState<FinderSearch[]>('finder.searches', []);
+  const [activeSearch, setActiveSearch] = useViewState<FinderSearch | null>('finder.activeSearch', null);
+  const [results, setResults] = useViewState<FinderResult[]>('finder.results', []);
   const [selected, setSelected] = useState<string[]>([]);
   const [preview, setPreview] = useState<FinderResult | null>(null);
-  const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState('All results');
-  const [sort, setSort] = useState('Highest score');
-  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useViewState('finder.query', '');
+  const [filter, setFilter] = useViewState('finder.filter', 'All results');
+  const [sort, setSort] = useViewState('finder.sort', 'Highest score');
+  const [loading, setLoading] = useViewState('finder.loading', true);
   const [busy, setBusy] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState('');
   const [importOpen, setImportOpen] = useState(false);
   const [importSummary, setImportSummary] = useState<{ imported: number; skipped: number } | null>(null);
   const [importForm, setImportForm] = useState({ owner: 'Shaun', priority: 'Medium', status: 'New', followUpDate: defaultFollowUpDate });
-  const [aiUsage, setAiUsage] = useState<FinderAiUsage>({ requests: 0, promptTokens: 0, outputTokens: 0, estimatedUsd: 0, budgetUsd: 2 });
+  const [aiUsage, setAiUsage] = useViewState<FinderAiUsage>('finder.aiUsage', { requests: 0, promptTokens: 0, outputTokens: 0, estimatedUsd: 0, budgetUsd: 2 });
   const [editingSearch, setEditingSearch] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const pollRef = useRef<number | null>(null);
