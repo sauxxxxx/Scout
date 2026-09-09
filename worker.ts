@@ -22,6 +22,36 @@ const identityHeaders = [
   'oai-authenticated-user-avatar-url',
 ];
 
+function validTeamDomain(value?: string) {
+  const domain = value?.trim().toLowerCase();
+  return domain && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.cloudflareaccess\.com$/.test(domain) ? domain : null;
+}
+
+async function accessIdentity(request: Request, env: FinderEnv, ctx: CloudflareExecutionContext) {
+  try {
+    const identity = await ctx.access?.getIdentity();
+    if (identity?.email) return identity;
+  } catch {
+    // Framework static-asset routers currently do not forward ctx.access.
+  }
+
+  const teamDomain = validTeamDomain(env.CLOUDFLARE_ACCESS_TEAM_DOMAIN);
+  const cookie = request.headers.get('cookie');
+  if (!teamDomain || !cookie || !/(?:^|;\s*)CF_Authorization=/.test(cookie)) return null;
+
+  try {
+    const response = await fetch(`https://${teamDomain}/cdn-cgi/access/get-identity`, {
+      headers: { accept: 'application/json', cookie },
+      redirect: 'manual',
+    });
+    if (!response.ok) return null;
+    const identity = await response.json() as CloudflareAccessIdentity;
+    return identity.email ? identity : null;
+  } catch {
+    return null;
+  }
+}
+
 async function authenticatedRequest(request: Request, env: FinderEnv, ctx: CloudflareExecutionContext) {
   if (env.AUTH_PROVIDER !== 'cloudflare-access') return request;
 
@@ -29,7 +59,7 @@ async function authenticatedRequest(request: Request, env: FinderEnv, ctx: Cloud
   identityHeaders.forEach(header => headers.delete(header));
   headers.set('x-scout-auth-provider', 'cloudflare-access');
 
-  const identity = await ctx.access?.getIdentity();
+  const identity = await accessIdentity(request, env, ctx);
   const email = identity?.email?.trim().toLowerCase();
   if (email) {
     const name = identity?.name?.trim() || email.split('@')[0];

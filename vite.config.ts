@@ -15,9 +15,11 @@ const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === 'seatbelt';
 const localBindingConfig = {
   name: 'scout',
   main: './worker.ts',
+  compatibility_date: '2026-09-09',
   compatibility_flags: ['nodejs_compat'],
   vars: {
     AUTH_PROVIDER: 'cloudflare-access',
+    CLOUDFLARE_ACCESS_TEAM_DOMAIN: 'tiny-glade-7569.cloudflareaccess.com',
     GEMINI_MODEL: 'gemini-3.1-flash-lite',
     FINDER_AI_MONTHLY_BUDGET_USD: '2',
     FINDER_AI_MAX_CANDIDATES: '20',

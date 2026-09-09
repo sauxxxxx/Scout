@@ -4,6 +4,7 @@ export type FinderEnv = {
   DB: D1Database;
   FINDER_QUEUE?: Queue<FinderJobMessage>;
   AUTH_PROVIDER?: 'cloudflare-access' | 'openai-sites';
+  CLOUDFLARE_ACCESS_TEAM_DOMAIN?: string;
   GOOGLE_PLACES_API_KEY?: string;
   GEMINI_API_KEY?: string;
   GEMINI_MODEL?: string;
