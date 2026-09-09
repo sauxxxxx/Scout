@@ -87,11 +87,13 @@ function Heading({ title, action }:{title:string;action?:React.ReactNode}) {
 type FloatingMenuPosition={top?:number;bottom?:number;left:number;width:number;maxHeight:number;placement:'up'|'down'};
 function useFloatingMenu(open:boolean,trigger:React.RefObject<HTMLButtonElement|null>,options:string[]) {
   const [position,setPosition]=useState<FloatingMenuPosition|null>(null);
+  const optionCount=options.length;
+  const longestOption=options.reduce((length,option)=>Math.max(length,option.length),0);
   useLayoutEffect(()=>{
-    if(!open){setPosition(null);return}
-    const update=()=>{const element=trigger.current;if(!element)return;const rect=element.getBoundingClientRect();const margin=8;const gap=4;const naturalHeight=Math.min(options.length*32+12,292);const below=Math.max(0,window.innerHeight-rect.bottom-margin-gap);const above=Math.max(0,rect.top-margin-gap);const placement:FloatingMenuPosition['placement']=below<naturalHeight&&above>below?'up':'down';const available=placement==='up'?above:below;const longest=options.reduce((length,option)=>Math.max(length,option.length),0);const width=Math.max(rect.width,Math.min(220,longest*7+46));const left=Math.max(margin,Math.min(rect.left,window.innerWidth-width-margin));setPosition({top:placement==='down'?rect.bottom+gap:undefined,bottom:placement==='up'?window.innerHeight-rect.top+gap:undefined,left,width,maxHeight:Math.max(32,Math.min(naturalHeight,available)),placement})};
+    if(!open)return;
+    const update=()=>{const element=trigger.current;if(!element)return;const rect=element.getBoundingClientRect();const margin=8;const gap=4;const naturalHeight=Math.min(optionCount*32+12,292);const below=Math.max(0,window.innerHeight-rect.bottom-margin-gap);const above=Math.max(0,rect.top-margin-gap);const placement:FloatingMenuPosition['placement']=below<naturalHeight&&above>below?'up':'down';const available=placement==='up'?above:below;const width=Math.max(rect.width,Math.min(220,longestOption*7+46));const left=Math.max(margin,Math.min(rect.left,window.innerWidth-width-margin));setPosition({top:placement==='down'?rect.bottom+gap:undefined,bottom:placement==='up'?window.innerHeight-rect.top+gap:undefined,left,width,maxHeight:Math.max(32,Math.min(naturalHeight,available)),placement})};
     update();window.addEventListener('resize',update);window.addEventListener('scroll',update,true);return()=>{window.removeEventListener('resize',update);window.removeEventListener('scroll',update,true)}
-  },[open,options,trigger]);
+  },[open,optionCount,longestOption,trigger]);
   return position;
 }
 
@@ -488,3 +490,5 @@ export default function Home() {
     {command&&<div className="command-backdrop" onClick={()=>setCommand(false)}><div className="command" onClick={e=>e.stopPropagation()}><input autoFocus placeholder="Search anything…"/><p>Navigate</p>{(['Overview','Leads','Finder','Pipeline','Tasks','Activities','Settings'] as Page[]).map(p=><button key={p} onClick={()=>{setPage(p);setCommand(false)}}><span>{p}</span><kbd>↵</kbd></button>)}<p>Quick actions</p><button onClick={()=>{setPage('Finder');setCommand(false)}}><span>Find businesses</span><small>Start a new campaign</small></button></div></div>}{toast&&<div className="toast">✓ {toast}</div>}
   </Shell>;
 }
+
+export { Activities, Finder, Leads, PipelineWorkspace, Settings, Tasks };
