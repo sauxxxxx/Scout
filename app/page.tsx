@@ -5,15 +5,16 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FiActivity, FiBell, FiCalendar, FiCheck, FiCheckSquare, FiChevronDown, FiChevronRight, FiColumns, FiEdit3, FiFileText, FiHome, FiMail, FiMoreHorizontal, FiPhone, FiPlus, FiSearch, FiSettings, FiTarget, FiUsers, FiX } from 'react-icons/fi';
 import { nextRecurringTaskDue } from '@/lib/task-dates';
+import { FinderWorkspace } from '@/components/FinderWorkspace';
 
-type Page = 'Overview' | 'Leads' | 'Finder' | 'Pipeline' | 'Tasks' | 'Activities' | 'Settings';
+export type Page = 'Overview' | 'Leads' | 'Finder' | 'Pipeline' | 'Tasks' | 'Activities' | 'Settings';
 type WorkspaceRole = 'owner' | 'admin' | 'member' | 'viewer';
 type Session = {user:{id:string;email:string;name:string;avatarUrl?:string};workspace:{id:string;name:string};role:WorkspaceRole;localDevelopment:boolean};
 type WorkspaceUser = {id:string;email:string;name:string;avatarUrl?:string;role:WorkspaceRole;pending:boolean};
 type Company={id:string;version:number;name:string;industry:string;city:string;phone:string;email:string;website?:string;owner:string;archived:boolean};
 type Contact={id:string;version:number;companyId:string;name:string;title?:string;email:string;phone:string;isPrimary:boolean;archived:boolean};
 type Opportunity={id:string;version:number;companyId:string;leadId?:string;primaryContactId?:string;name:string;stage:string;value:number;probability:number;closeDate?:string;owner:string;priority:string;outcome?:string;archived:boolean};
-type Lead = { id?:string; version?:number; companyId?:string;primaryContactId?:string; name:string; industry:string; city:string; status:string; score:number; owner:string; last:string; next:string; phone:string; email:string; contact:string; priority:string; opportunity:string; value?:number; probability?:number; closeDate?:string; archived?:boolean };
+export type Lead = { id?:string; version?:number; companyId?:string;primaryContactId?:string; name:string; industry:string; city:string; status:string; score:number; owner:string; last:string; next:string; phone:string; email:string; contact:string; priority:string; opportunity:string; value?:number; probability?:number; closeDate?:string; archived?:boolean };
 type ActivityEntry = { uid?:string; id:number; version?:number; lead:string; leadId?:string;companyId?:string;contactId?:string;opportunityId?:string; type:string; detail:string; time:string; owner:string; status?:'Completed'|'Scheduled'; occurredAt?:string; outcome?:string; duration?:string; subject?:string; value?:string; documentLink?:string; attachmentKey?:string; attachmentName?:string; relatedTaskId?:number; relatedTaskUid?:string; opportunity?:string; deletedAt?:string };
 type TaskItem = { uid?:string; id:number; version?:number; title:string; lead:string; leadId?:string;companyId?:string;contactId?:string;opportunityId?:string; owner:string; priority:string; due:string; dueAt?:string; time:string; type:string; notes:string; status:'Open'|'Backlog'|'Scheduled'|'In progress'|'Waiting'|'Completed'; reminder?:string; recurrence?:string; outcome?:string };
 
@@ -479,7 +480,7 @@ export default function Home() {
       <section className="content"><div className="page-transition" key={`${page}-${page==='Leads'?leadView:''}`}>
         {page==='Overview'&&<Overview setPage={setPage} leads={leads} opportunities={opportunities} tasks={tasks} activities={activities} openTask={openTask}/>}
         {page==='Leads'&&<Leads leads={leads} setLeads={setLeads} activities={activities} setActivities={setActivities} setTasks={setTasks} leadView={leadView} notify={notify} focusedLead={focusedLead} setFocusedLead={setFocusedLead} companies={companies} contacts={contacts} opportunities={opportunities} onSaveCompany={saveCompany} onCreateContact={createContact} onSaveContact={saveContact} onDeleteContact={deleteContact} onCreateOpportunity={createOpportunity} onSaveOpportunity={saveOpportunity}/>}
-        {page==='Finder'&&<Finder notify={notify} leads={leads} onImportedLeads={acceptImportedLeads} setPage={setPage} finderView={finderView} setFinderView={setFinderView}/>}
+        {page==='Finder'&&<FinderWorkspace notify={notify} leads={leads} onImportedLeads={acceptImportedLeads} setPage={setPage} finderView={finderView} setFinderView={setFinderView}/>}
         {page==='Pipeline'&&<PipelineWorkspace view={pipelineView} setView={setPipelineView} opportunities={opportunities} companies={companies} contacts={contacts} leads={leads} tasks={tasks} activities={activities} onCreate={createOpportunity} onSave={saveOpportunity} notify={notify} openLead={openLead} focusedOpportunity={focusedOpportunity} setFocusedOpportunity={setFocusedOpportunity}/>}
         {page==='Tasks'&&<Tasks tasks={tasks} setTasks={setTasks} leads={leads} setLeads={setLeads} setActivities={setActivities} notify={notify} openLead={openLead} taskView={taskView} focusedTaskId={focusedTaskId} setFocusedTaskId={setFocusedTaskId}/>}
         {page==='Activities'&&<Activities activities={activities} setActivities={setActivities} leads={leads} tasks={tasks} setTasks={setTasks} notify={notify} openLead={setPreviewLeadName} openTask={openTask} openOpportunity={openOpportunity} activityView={activityView} setActivityView={setActivityView}/>}

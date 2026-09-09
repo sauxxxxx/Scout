@@ -1,4 +1,4 @@
-import { createGeminiProvider, finderAiInputHash, geminiCostMicroUsd, parseAssessment, type FinderAiAssessment, type FinderAiInput, type FinderAiStatus } from '@/lib/finder-ai';
+import { calibrateAssessment, createGeminiProvider, finderAiInputHash, geminiCostMicroUsd, parseAssessment, type FinderAiAssessment, type FinderAiInput, type FinderAiStatus } from '@/lib/finder-ai';
 
 export type FinderStatus = 'Saved' | 'Queued' | 'Running' | 'Complete' | 'Partial' | 'Failed' | 'Cancelled';
 
@@ -237,7 +237,7 @@ async function processFinderAiResult(db: D1Database, workspaceId: string, search
   const cached = await db.prepare('SELECT * FROM finder_ai_cache WHERE workspace_id=? AND input_hash=? AND model=?').bind(workspaceId, inputHash, model).first<Record<string, unknown>>();
   const cachedAssessment = cached && parseAssessment(cached.assessment_json);
   if (cachedAssessment) {
-    await applyAssessment(db, workspaceId, resultId, cachedAssessment, model, 'cached', inputHash, Number(cached.prompt_tokens || 0), Number(cached.output_tokens || 0), 0);
+    await applyAssessment(db, workspaceId, resultId, calibrateAssessment(input, cachedAssessment), model, 'cached', inputHash, Number(cached.prompt_tokens || 0), Number(cached.output_tokens || 0), 0);
     return;
   }
   const provider = createGeminiProvider(config.geminiApiKey, model);
@@ -259,10 +259,11 @@ async function processFinderAiResult(db: D1Database, workspaceId: string, search
   }
   try {
     const response = await provider.assess(input); const cost = geminiCostMicroUsd(response.promptTokens, response.outputTokens);
+    const assessment = calibrateAssessment(input, response.assessment);
     await db.prepare(`INSERT INTO finder_ai_cache (workspace_id,input_hash,model,assessment_json,prompt_tokens,output_tokens,estimated_cost_microusd) VALUES (?,?,?,?,?,?,?)
       ON CONFLICT(workspace_id,input_hash,model) DO UPDATE SET assessment_json=excluded.assessment_json,prompt_tokens=excluded.prompt_tokens,output_tokens=excluded.output_tokens,estimated_cost_microusd=excluded.estimated_cost_microusd,updated_at=CURRENT_TIMESTAMP`)
       .bind(workspaceId, inputHash, model, JSON.stringify(response.assessment), response.promptTokens, response.outputTokens, cost).run();
-    await applyAssessment(db, workspaceId, resultId, response.assessment, model, 'complete', inputHash, response.promptTokens, response.outputTokens, cost);
+    await applyAssessment(db, workspaceId, resultId, assessment, model, 'complete', inputHash, response.promptTokens, response.outputTokens, cost);
     await db.prepare("UPDATE finder_ai_usage SET status='committed',actual_microusd=?,prompt_tokens=?,output_tokens=?,updated_at=CURRENT_TIMESTAMP WHERE request_id=? AND status='reserved'").bind(cost, response.promptTokens, response.outputTokens, requestId).run();
   } catch (error) {
     const message = error instanceof Error ? error.message.slice(0, 400) : 'AI assessment failed.';

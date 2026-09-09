@@ -134,7 +134,7 @@ export async function POST(request: Request) {
     const existing = await auth.db.prepare('SELECT id FROM finder_searches WHERE id=? AND workspace_id=?').bind(id, auth.session.workspace.id).first<{ id: string }>();
     if (!existing) return Response.json({ error: 'Finder search not found.' }, { status: 404 });
     await auth.db.batch([
-      auth.db.prepare("UPDATE finder_results SET ai_status=CASE WHEN ai_status IN ('failed','budget_limited','skipped') THEN 'pending' ELSE ai_status END,ai_error=NULL,updated_at=CURRENT_TIMESTAMP WHERE search_id=? AND workspace_id=?").bind(id, auth.session.workspace.id),
+      auth.db.prepare("UPDATE finder_results SET ai_status=CASE WHEN imported_lead_id IS NULL THEN 'pending' ELSE ai_status END,ai_error=NULL,ai_input_hash=CASE WHEN imported_lead_id IS NULL THEN NULL ELSE ai_input_hash END,updated_at=CURRENT_TIMESTAMP WHERE search_id=? AND workspace_id=?").bind(id, auth.session.workspace.id),
       auth.db.prepare("UPDATE finder_searches SET status='Queued',progress=2,stage='Queued',error=NULL,started_at=NULL,completed_at=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?").bind(id, auth.session.workspace.id),
     ]);
   } else {
@@ -152,10 +152,21 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const auth = await authenticateRequest(request, 'records:write');
   if (!auth.ok) return auth.response;
-  const body = await request.json() as { id?: string; action?: string };
-  if (!body.id || body.action !== 'cancel') return Response.json({ error: 'Finder search ID and cancel action are required.' }, { status: 400 });
-  const result = await auth.db.prepare("UPDATE finder_searches SET status='Cancelled',stage='Cancelled',updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND status IN ('Queued','Running')").bind(body.id, auth.session.workspace.id).run();
-  if (!result.meta.changes) return Response.json({ error: 'This search can no longer be cancelled.' }, { status: 409 });
+  let body: { id?: string; action?: string; name?: string };
+  try { body = await request.json() as typeof body; } catch { return Response.json({ error: 'Invalid JSON body.' }, { status: 400 }); }
+  if (!body.id || !['cancel', 'save', 'unsave', 'rename'].includes(body.action || '')) return Response.json({ error: 'A valid Finder search action is required.' }, { status: 400 });
+  let result;
+  if (body.action === 'cancel') {
+    result = await auth.db.prepare("UPDATE finder_searches SET status='Cancelled',stage='Cancelled',updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND status IN ('Queued','Running')").bind(body.id, auth.session.workspace.id).run();
+    if (!result.meta.changes) return Response.json({ error: 'This search can no longer be cancelled.' }, { status: 409 });
+  } else if (body.action === 'rename') {
+    const name = body.name?.trim();
+    if (!name || name.length < 2 || name.length > 160) return Response.json({ error: 'Search name must be between 2 and 160 characters.' }, { status: 422 });
+    result = await auth.db.prepare('UPDATE finder_searches SET name=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?').bind(name, body.id, auth.session.workspace.id).run();
+  } else {
+    result = await auth.db.prepare('UPDATE finder_searches SET saved=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?').bind(body.action === 'save' ? 1 : 0, body.id, auth.session.workspace.id).run();
+  }
+  if (!result.meta.changes) return Response.json({ error: 'Finder search not found.' }, { status: 404 });
   return Response.json(await finderPayload(auth.db, auth.session.workspace.id, body.id));
 }
 

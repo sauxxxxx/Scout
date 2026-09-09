@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { assessPlace } from '@/lib/finder-store';
-import { createGeminiProvider, finderAiAssessmentSchema, finderAiInputHash, geminiCostMicroUsd, withinBudget, type FinderAiInput } from '@/lib/finder-ai';
+import { calibrateAssessment, createGeminiProvider, finderAiAssessmentSchema, finderAiInputHash, geminiCostMicroUsd, withinBudget, type FinderAiAssessment, type FinderAiInput } from '@/lib/finder-ai';
 import { finderImportSchema, finderSearchSchema } from '@/lib/validation';
 
 describe('Finder qualification', () => {
@@ -22,7 +22,7 @@ const aiInput: FinderAiInput = {
   name: 'ABC Dental Clinic', industry: 'Dental clinic', location: 'Cebu City', address: 'Cebu City', phone: '+63 1', email: '', website: 'https://example.com', socialUrl: '', businessStatus: 'OPERATIONAL', rating: 4.6, reviewCount: 40, websiteSummary: 'Family dental clinic', searchIndustry: 'Dental clinics', searchLocation: 'Cebu City', ruleScore: 81, ruleReason: 'operational', evidence: [{ id: 'evidence-1', field: 'business', provider: 'Google Places', sourceUrl: 'https://maps.google.com/' }],
 };
 
-const validAssessment = { classification: 'Dental clinic', icpMatch: 'strong', fitScore: 91, confidence: 'high', explanation: 'Matches the requested industry and location.', opportunitySignals: ['Published website'], concerns: ['No public email'], recommendedNextAction: 'Call the published business number.', evidenceReferences: ['evidence-1'] };
+const validAssessment: FinderAiAssessment = { classification: 'Dental clinic', icpMatch: 'strong', fitScore: 91, confidence: 'high', explanation: 'Matches the requested industry and location.', opportunitySignals: ['Published website'], concerns: ['No public email'], recommendedNextAction: 'Call the published business number.', evidenceReferences: ['evidence-1'] };
 
 describe('Gemini Finder intelligence', () => {
   it('validates the structured assessment and rejects malformed output', () => {
@@ -39,6 +39,14 @@ describe('Gemini Finder intelligence', () => {
 
   it('uses stable hashes for cache and deduplication', async () => {
     await expect(finderAiInputHash(aiInput)).resolves.toBe(await finderAiInputHash({ ...aiInput }));
+  });
+
+  it('calibrates confident model scores against the collected evidence', () => {
+    const sparse = calibrateAssessment({ ...aiInput, website: '', websiteSummary: '', email: '', socialUrl: '', rating: undefined, reviewCount: 0 }, validAssessment);
+    const evidenced = calibrateAssessment({ ...aiInput, email: 'hello@example.com', socialUrl: 'https://facebook.com/example', reviewCount: 500 }, validAssessment);
+    expect(sparse.fitScore).toBeLessThan(evidenced.fitScore);
+    expect(sparse.confidence).toBe('medium');
+    expect(sparse.concerns).toContain('No business website was found.');
   });
 
   it('parses structured Gemini output and records tokens', async () => {

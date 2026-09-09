@@ -87,6 +87,54 @@ export function withinBudget(currentMicroUsd: number, reservationMicroUsd: numbe
   return currentMicroUsd + reservationMicroUsd <= limitMicroUsd;
 }
 
+function unique(values: string[]) {
+  return [...new Set(values.map(value => value.trim()).filter(Boolean))];
+}
+
+/**
+ * Keeps Gemini's judgement useful without allowing a confident model response to
+ * overpower the public evidence Scout actually collected.
+ */
+export function calibrateAssessment(input: FinderAiInput, assessment: FinderAiAssessment): FinderAiAssessment {
+  const ratingAdjustment = input.rating == null ? -2 : Math.max(-4, Math.min(3, Math.round((input.rating - 4) * 4)));
+  const reviewAdjustment = input.reviewCount == null || input.reviewCount === 0 ? -6
+    : input.reviewCount < 10 ? -4
+      : input.reviewCount < 25 ? -2
+        : input.reviewCount >= 500 ? 3
+          : input.reviewCount >= 100 ? 2 : 0;
+  const evidenceAdjustment = (input.phone ? 2 : -12)
+    + (input.website ? 2 : -3)
+    + (input.email ? 2 : 0)
+    + (input.socialUrl ? 1 : 0)
+    + (input.websiteSummary ? 1 : 0);
+  let fitScore = Math.round(input.ruleScore * 0.45 + assessment.fitScore * 0.55 + ratingAdjustment + reviewAdjustment + evidenceAdjustment);
+  if (input.businessStatus && input.businessStatus !== 'OPERATIONAL') fitScore = Math.min(fitScore, 58);
+  if (!input.phone) fitScore = Math.min(fitScore, 64);
+  fitScore = Math.max(0, Math.min(96, fitScore));
+
+  const evidenceCount = [input.phone, input.website, input.email, input.socialUrl].filter(Boolean).length;
+  const confidence = evidenceCount >= 3 && Boolean(input.websiteSummary)
+    ? assessment.confidence
+    : assessment.confidence === 'high' ? 'medium' : assessment.confidence;
+  const icpMatch = fitScore >= 82
+    ? (assessment.icpMatch === 'weak' || assessment.icpMatch === 'unknown' ? 'moderate' : assessment.icpMatch)
+    : fitScore >= 68 ? 'moderate' : 'weak';
+  const evidenceConcerns = [
+    !input.phone ? 'No public business phone was found.' : '',
+    !input.website ? 'No business website was found.' : '',
+    !input.email ? 'No public business email was found.' : '',
+    input.rating == null ? 'Google rating is unavailable.' : '',
+  ];
+
+  return {
+    ...assessment,
+    fitScore,
+    confidence,
+    icpMatch,
+    concerns: unique([...assessment.concerns, ...evidenceConcerns]).slice(0, 6),
+  };
+}
+
 const delay = (milliseconds: number) => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 export function createGeminiProvider(apiKey: string | undefined, model = 'gemini-3.1-flash-lite', fetcher: typeof fetch = fetch): FinderAiProvider | undefined {
@@ -96,8 +144,8 @@ export function createGeminiProvider(apiKey: string | undefined, model = 'gemini
     async assess(input) {
       const allowedEvidence = new Set(input.evidence.map(item => item.id));
       const body = {
-        systemInstruction: { parts: [{ text: 'You qualify sales prospects for Scout CRM. Use only the supplied facts. Never infer or invent contact data, company facts, or evidence. Unknown facts must remain unknown. Return only the requested JSON.' }] },
-        contents: [{ role: 'user', parts: [{ text: `Assess this business against the search intent. Evidence references must contain only IDs from evidence.\n${JSON.stringify(input)}` }] }],
+        systemInstruction: { parts: [{ text: 'You qualify sales prospects for Scout CRM. Use only the supplied facts. Never infer or invent contact data, company facts, or evidence. Unknown facts must remain unknown. Differentiate scores: 82-100 is a strong, well-evidenced fit; 68-81 is promising but needs validation; below 68 is weak or poorly evidenced. A missing website may be a sales opportunity, but is not proof of customer fit. Confidence must reflect evidence coverage. Return only the requested JSON.' }] },
+        contents: [{ role: 'user', parts: [{ text: `Assess this business against the search industry and location. Explain the strongest verified signals and material gaps, recommend one concrete next action, and use only supplied evidence IDs.\n${JSON.stringify(input)}` }] }],
         generationConfig: { temperature: 0.1, maxOutputTokens: 500, responseMimeType: 'application/json', responseJsonSchema: assessmentJsonSchema },
       };
       let lastError: unknown;

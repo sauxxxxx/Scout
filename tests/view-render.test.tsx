@@ -2,6 +2,7 @@ import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { Activities, Finder, Leads, PipelineWorkspace, Settings, Tasks } from '../app/page';
+import { FinderWorkspace } from '../components/FinderWorkspace';
 
 const noop = vi.fn();
 const asyncNoop = vi.fn(async () => undefined);
@@ -21,6 +22,7 @@ describe('primary workspace views', () => {
   it.each([
     ['Leads', Leads, { leads: [lead], setLeads: noop, activities: [], setActivities: noop, setTasks: noop, leadView: 'Leads', notify: noop, focusedLead: null, setFocusedLead: noop, companies: [company], contacts: [contact], opportunities: [opportunity], onSaveCompany: asyncNoop, onCreateContact: asyncNoop, onSaveContact: asyncNoop, onDeleteContact: asyncNoop, onCreateOpportunity: asyncNoop, onSaveOpportunity: asyncNoop }],
     ['Finder', Finder, { notify: noop, leads: [lead], onImportedLeads: noop, setPage: noop, finderView: 'New search', setFinderView: noop }],
+    ['Finder workflow', FinderWorkspace, { notify: noop, leads: [lead], onImportedLeads: noop, setPage: noop, finderView: 'New search', setFinderView: noop }],
     ['Pipeline', PipelineWorkspace, { view: 'All pipeline', setView: noop, opportunities: [opportunity], companies: [company], contacts: [contact], leads: [lead], tasks: [], activities: [], onCreate: asyncNoop, onSave: asyncNoop, notify: noop, openLead: noop, focusedOpportunity: null, setFocusedOpportunity: noop }],
     ['Tasks', Tasks, { tasks: [], setTasks: noop, leads: [lead], setLeads: noop, setActivities: noop, notify: noop, openLead: noop, taskView: 'Today', focusedTaskId: null, setFocusedTaskId: noop }],
     ['Activities', Activities, { activities: [], setActivities: noop, leads: [lead], tasks: [], setTasks: noop, notify: noop, openLead: noop, openTask: noop, openOpportunity: noop, activityView: 'All activity', setActivityView: noop }],
