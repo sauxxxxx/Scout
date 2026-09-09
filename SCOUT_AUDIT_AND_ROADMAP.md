@@ -6,7 +6,7 @@ Scout is currently a strong interactive prototype, but not yet a production-read
   - [ ] Suggestion: add sign-in, sessions, password recovery, and account management.
 
 - [x] **No roles or permissions:** Shaun, Mika, and Paolo are hardcoded labels rather than real users.
-  - [ ] Suggestion: create users, teams, invitations, roles, record ownership, and permission rules.
+  - [x] Suggestion: create users, teams, invitations, roles, record ownership, and permission rules.
 
 - [x] **Unsafe multi-user persistence:** Leads and tasks are saved as entire collections, so concurrent sessions could overwrite one another.
   - [x] Suggestion: use individual create/update/delete endpoints with optimistic concurrency.
@@ -231,7 +231,7 @@ These core CRM capabilities do not yet exist:
 
 - [ ] Email sequences
 - [ ] Automated follow-ups
-- [ ] Lead assignment rules
+- [x] Lead assignment rules
 - [ ] Stage-triggered actions
 - [ ] Stale-lead alerts
 - [ ] Task templates

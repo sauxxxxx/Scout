@@ -25,6 +25,7 @@ import {
 } from 'react-icons/fi';
 import type { Lead, Page } from '@/app/page';
 import { useViewState } from '@/lib/client-view-cache';
+import { useWorkspaceMembers } from '@/components/WorkspaceMembers';
 
 type FinderStatus = 'Saved' | 'Queued' | 'Running' | 'Complete' | 'Partial' | 'Failed' | 'Cancelled';
 type FinderSearch = {
@@ -44,7 +45,7 @@ type FinderResult = {
   aiEvidenceReferences: string[]; aiPromptTokens: number; aiOutputTokens: number; aiEstimatedCostUsd: number; aiError?: string; aiAnalyzedAt?: string;
 };
 type FinderAiUsage = { requests: number; promptTokens: number; outputTokens: number; estimatedUsd: number; budgetUsd: number };
-type FinderPayload = { search?: FinderSearch; searches?: FinderSearch[]; results?: FinderResult[]; aiUsage?: FinderAiUsage; imported?: Lead[]; skipped?: number; error?: string };
+type FinderPayload = { search?: FinderSearch; searches?: FinderSearch[]; results?: FinderResult[]; aiUsage?: FinderAiUsage; imported?: Lead[]; skipped?: number; assignments?: { userId: string; name: string; count: number }[]; error?: string };
 
 type Props = {
   notify: (message: string) => void;
@@ -116,6 +117,7 @@ function elapsedBetween(startValue?: string, endValue?: string) {
 }
 
 export function FinderWorkspace({ notify, leads, onImportedLeads, setPage, finderView, setFinderView, onBreadcrumbChange }: Props) {
+  const { assignableMembers, currentMember, currentRole } = useWorkspaceMembers();
   const [criteria, setCriteria] = useViewState('finder.criteria', { industry: 'Dental clinics', location: 'Cebu City', count: '20' });
   const [requirements, setRequirements] = useViewState('finder.requirements', ['Phone']);
   const [searches, setSearches] = useViewState<FinderSearch[]>('finder.searches', []);
@@ -132,12 +134,25 @@ export function FinderWorkspace({ notify, leads, onImportedLeads, setPage, finde
   const [error, setError] = useState('');
   const [importOpen, setImportOpen] = useState(false);
   const [importSummary, setImportSummary] = useState<{ imported: number; skipped: number } | null>(null);
-  const [importForm, setImportForm] = useState({ owner: 'Shaun', priority: 'Medium', status: 'New', followUpDate: defaultFollowUpDate });
+  const [importForm, setImportForm] = useState({ assignmentMode: 'single' as 'single' | 'round_robin' | 'manual', ownerId: '', assigneeIds: [] as string[], manualAssignments: {} as Record<string, string>, priority: 'Medium', status: 'New', followUpDate: defaultFollowUpDate });
   const [aiUsage, setAiUsage] = useViewState<FinderAiUsage>('finder.aiUsage', { requests: 0, promptTokens: 0, outputTokens: 0, estimatedUsd: 0, budgetUsd: 2 });
   const [editingSearch, setEditingSearch] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const pollRef = useRef<number | null>(null);
   const existingNames = useMemo(() => new Set(leads.map((lead) => lead.name.toLowerCase())), [leads]);
+  const canAssignTeam = currentRole === 'owner' || currentRole === 'admin';
+  const availableAssignees = useMemo(() => canAssignTeam ? assignableMembers : assignableMembers.filter(member => member.id === currentMember?.id), [assignableMembers, canAssignTeam, currentMember?.id]);
+
+  useEffect(() => {
+    const fallbackId = currentMember?.id || availableAssignees[0]?.id;
+    if (!fallbackId || importForm.ownerId) return;
+    setImportForm(current => ({ ...current, ownerId: fallbackId, assigneeIds: [fallbackId] }));
+  }, [availableAssignees, currentMember?.id, importForm.ownerId]);
+
+  useEffect(() => {
+    if (!selected.length || !availableAssignees.length) return;
+    setImportForm(current => ({ ...current, manualAssignments: Object.fromEntries(selected.map((id, index) => [id, current.manualAssignments[id] || availableAssignees[index % availableAssignees.length].id])) }));
+  }, [selected, availableAssignees]);
 
   const request = async (url: string, init?: RequestInit) => {
     const response = await fetch(url, init);
@@ -376,6 +391,22 @@ export function FinderWorkspace({ notify, leads, onImportedLeads, setPage, finde
     {selected.length > 0 && <div className="finder-selection-bar"><div><strong>{selected.length} selected</strong><span>Duplicates are automatically skipped.</span></div><button onClick={() => setSelected([])}>Clear</button><button className="primary" onClick={() => setImportOpen(true)}>Add selected to Leads <FiChevronRight /></button></div>}
     {isRunning && <div className="finder-live-footer"><Spinner /><span><strong>{activeSearch.stage}</strong> · Results continue appearing automatically.</span><strong>{activeSearch.progress}%</strong></div>}
     {preview && <div className="drawer-backdrop" onClick={() => setPreview(null)}><aside className="finder-insight-drawer" role="dialog" aria-modal="true" aria-label={`${preview.name} assessment`} onClick={(event) => event.stopPropagation()}><header><div><h2>{preview.name}</h2><p>{preview.industry} · {preview.city}</p></div><button onClick={() => setPreview(null)} aria-label="Close"><FiX /></button></header><div className="finder-drawer-score"><div><span>Fit score</span><strong>{scoreOf(preview)}</strong><small>{qualification(preview, activeRequirements)}</small></div><div><span>Confidence</span><strong>{confidenceOf(preview)}</strong><small>{preview.aiStatus === 'cached' ? 'Previously assessed' : preview.aiStatus === 'complete' ? 'AI assessed' : 'Basic assessment'}</small></div><div><span>Opportunity</span><strong>{preview.opportunity}</strong><small>{preview.aiClassification || 'Business prospect'}</small></div></div><section><h3>Verified business details</h3><div className="finder-detail-grid"><p><span><FiPhone /> Phone</span><strong>{preview.phone || 'Not published'}</strong></p><p><span><FiMail /> Email</span><strong>{preview.email || 'Not published'}</strong></p><p><span><FiGlobe /> Website</span>{preview.website ? <a href={preview.website} target="_blank" rel="noreferrer">Open website <FiExternalLink /></a> : <strong>Not found</strong>}</p><p><span><FiStar /> Google rating</span><strong>{preview.rating ? `${preview.rating.toFixed(1)} · ${(preview.reviewCount || 0).toLocaleString()} reviews` : 'Not available'}</strong></p></div></section><section className="finder-assessment-block"><h3>Scout assessment</h3><p>{preview.aiExplanation || preview.scoreReason}</p><div className="finder-assessment-tags"><span>{preview.aiIcpMatch || 'rule'} ICP match</span><span>{confidenceOf(preview)} confidence</span><span>{preview.businessStatus?.replaceAll('_', ' ').toLowerCase() || 'status unknown'}</span></div><div className="finder-signal-columns"><div><h4><FiCheck /> Opportunity signals</h4>{(preview.aiOpportunitySignals || []).length ? <ul>{preview.aiOpportunitySignals.map((signal) => <li key={signal}>{signal}</li>)}</ul> : <p>No additional AI signals recorded.</p>}</div><div><h4><FiAlertTriangle /> Concerns</h4>{(preview.aiConcerns || []).length ? <ul>{preview.aiConcerns.map((concern) => <li key={concern}>{concern}</li>)}</ul> : <p>No material concerns found.</p>}</div></div>{preview.aiRecommendedAction && <div className="finder-next-action"><span>Recommended next action</span><strong>{preview.aiRecommendedAction}</strong></div>}{preview.aiStatus === 'failed' && <div className="finder-alert error"><span>{preview.aiError || 'AI assessment failed.'}</span><button onClick={() => retryAi(preview)}>Retry AI</button></div>}</section><section><h3>Evidence and provenance</h3><div className="finder-evidence-list">{preview.provenance.map((item, index) => <a href={item.sourceUrl} target="_blank" rel="noreferrer" key={`${item.field}-${index}`}><i>{item.provider === 'Google Places' ? <FiMapPin /> : <FiGlobe />}</i><span><strong>{item.field === 'business' ? 'Business listing' : `${item.field[0].toUpperCase()}${item.field.slice(1)} source`}</strong><small>{item.provider} · retrieved {shortDate(item.retrievedAt)}</small></span><FiExternalLink /></a>)}</div></section><footer>{preview.importedLeadId || existingNames.has(preview.name.toLowerCase()) ? <button className="primary" onClick={() => setPage('Leads')}>View in Leads</button> : <button className="primary" onClick={() => { setSelected([preview.id]); setPreview(null); setImportOpen(true); }}>Add to Leads</button>}</footer></aside></div>}
-    {importOpen && <div className="modal-backdrop" onClick={() => setImportOpen(false)}><div className="modal finder-import-dialog" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}><header><div><h2>Add {selected.length} business{selected.length === 1 ? '' : 'es'} to Leads</h2><p>Scout will create the company, public contact, opportunity, activity, and first follow-up task.</p></div><button onClick={() => setImportOpen(false)} aria-label="Close"><FiX /></button></header><div className="modal-body"><div className="finder-import-grid"><label>Owner<select value={importForm.owner} onChange={(event) => setImportForm({ ...importForm, owner: event.target.value })}><option>Shaun</option><option>Mika</option><option>Paolo</option></select></label><label>Priority<select value={importForm.priority} onChange={(event) => setImportForm({ ...importForm, priority: event.target.value })}><option>High</option><option>Medium</option><option>Low</option></select></label><label>Lead status<select value={importForm.status} onChange={(event) => setImportForm({ ...importForm, status: event.target.value })}><option>New</option><option>Contacted</option><option>Interested</option></select></label><label>First follow-up<input type="date" value={importForm.followUpDate} onChange={(event) => setImportForm({ ...importForm, followUpDate: event.target.value })} /></label></div><div className="finder-import-note"><FiCheck /><span><strong>Duplicate-safe import</strong>Existing companies and leads will not be duplicated.</span></div></div><footer><button onClick={() => setImportOpen(false)}>Cancel</button><button className="primary" disabled={busy} onClick={importSelected}>{busy ? <><Spinner /> Importing…</> : `Add ${selected.length} to Leads`}</button></footer></div></div>}
+    {importOpen && <div className="modal-backdrop" onClick={() => setImportOpen(false)}><div className="modal finder-import-dialog" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+      <header><div><h2>Add {selected.length} business{selected.length === 1 ? '' : 'es'} to Leads</h2><p>Create the CRM records and assign their first follow-up.</p></div><button onClick={() => setImportOpen(false)} aria-label="Close"><FiX /></button></header>
+      <div className="modal-body">
+        {canAssignTeam && <div className="finder-assignment-modes"><button className={importForm.assignmentMode === 'single' ? 'active' : ''} onClick={() => setImportForm({ ...importForm, assignmentMode: 'single' })}>Single owner</button><button className={importForm.assignmentMode === 'round_robin' ? 'active' : ''} onClick={() => setImportForm({ ...importForm, assignmentMode: 'round_robin' })}>Round robin</button><button className={importForm.assignmentMode === 'manual' ? 'active' : ''} onClick={() => setImportForm({ ...importForm, assignmentMode: 'manual' })}>Manual</button></div>}
+        <div className="finder-import-grid">
+          {importForm.assignmentMode === 'single' && <label>Owner<select value={importForm.ownerId} onChange={(event) => setImportForm({ ...importForm, ownerId: event.target.value })}>{availableAssignees.map(member => <option value={member.id} key={member.id}>{member.name}</option>)}</select></label>}
+          {importForm.assignmentMode === 'round_robin' && <fieldset className="finder-assignee-list"><legend>Rotate between</legend>{availableAssignees.map(member => <label key={member.id}><input type="checkbox" checked={importForm.assigneeIds.includes(member.id)} onChange={() => setImportForm({ ...importForm, assigneeIds: importForm.assigneeIds.includes(member.id) ? importForm.assigneeIds.filter(id => id !== member.id) : [...importForm.assigneeIds, member.id] })} /> {member.name}</label>)}</fieldset>}
+          {importForm.assignmentMode === 'manual' && <div className="finder-manual-assignments">{selected.map(resultId => <label key={resultId}><span>{results.find(result => result.id === resultId)?.name || 'Selected business'}</span><select value={importForm.manualAssignments[resultId] || ''} onChange={(event) => setImportForm({ ...importForm, manualAssignments: { ...importForm.manualAssignments, [resultId]: event.target.value } })}>{availableAssignees.map(member => <option value={member.id} key={member.id}>{member.name}</option>)}</select></label>)}</div>}
+          <label>Priority<select value={importForm.priority} onChange={(event) => setImportForm({ ...importForm, priority: event.target.value })}><option>High</option><option>Medium</option><option>Low</option></select></label>
+          <label>Lead status<select value={importForm.status} onChange={(event) => setImportForm({ ...importForm, status: event.target.value })}><option>New</option><option>Contacted</option><option>Interested</option></select></label>
+          <label>First follow-up<input type="date" value={importForm.followUpDate} onChange={(event) => setImportForm({ ...importForm, followUpDate: event.target.value })} /></label>
+        </div>
+        {!availableAssignees.length && <div className="finder-alert error">Add an active member before importing leads.</div>}
+        <div className="finder-import-note"><FiCheck /><span><strong>Duplicate-safe import</strong>Existing companies and leads will not be duplicated.</span></div>
+      </div>
+      <footer><button onClick={() => setImportOpen(false)}>Cancel</button><button className="primary" disabled={busy || !availableAssignees.length || (importForm.assignmentMode === 'round_robin' && !importForm.assigneeIds.length)} onClick={importSelected}>{busy ? <><Spinner /> Importing…</> : `Add ${selected.length} to Leads`}</button></footer>
+    </div></div>}
   </div>;
 }

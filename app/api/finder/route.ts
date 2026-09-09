@@ -57,6 +57,13 @@ async function importResults(request: Request, body: unknown) {
   const parsed = finderImportSchema.safeParse(body);
   if (!parsed.success) return validationError(parsed.error);
   const input = parsed.data;
+  const requestedAssignees = input.assignmentMode === 'single' ? [input.ownerId!] : input.assignmentMode === 'round_robin' ? input.assigneeIds! : Object.values(input.manualAssignments!);
+  const uniqueAssignees = [...new Set(requestedAssignees)];
+  const memberPlaceholders = uniqueAssignees.map(() => '?').join(',');
+  const memberRows = await auth.db.prepare(`SELECT u.id,u.name FROM workspace_memberships m JOIN users u ON u.id=m.user_id WHERE m.workspace_id=? AND u.id IN (${memberPlaceholders}) AND u.status='active' AND m.role IN ('owner','admin','member')`)
+    .bind(auth.session.workspace.id, ...uniqueAssignees).all<{ id: string; name: string }>();
+  if (memberRows.results.length !== uniqueAssignees.length) return Response.json({ error: 'One or more selected assignees are not active workspace members.' }, { status: 422 });
+  const memberById = new Map(memberRows.results.map(member => [member.id, member]));
   const placeholders = input.resultIds.map(() => '?').join(',');
   const resultRows = await auth.db.prepare(`SELECT * FROM finder_results WHERE workspace_id=? AND search_id=? AND id IN (${placeholders}) ORDER BY score DESC`)
     .bind(auth.session.workspace.id, input.searchId, ...input.resultIds).all<Record<string, unknown>>();
@@ -64,8 +71,11 @@ async function importResults(request: Request, body: unknown) {
   let nextTaskId = Number((await auth.db.prepare('SELECT COALESCE(MAX(id),0)+1 next_id FROM tasks').first<{ next_id: number }>())?.next_id || 1);
   let nextActivityId = Number((await auth.db.prepare('SELECT COALESCE(MAX(id),0)+1 next_id FROM activities').first<{ next_id: number }>())?.next_id || 1);
   const imported: ReturnType<typeof mapLead>[] = [];
-  for (const row of resultRows.results) {
+  const assignmentCounts = new Map<string, number>();
+  for (const [resultIndex, row] of resultRows.results.entries()) {
     const result = mapFinderResult(row);
+    const assigneeId = input.assignmentMode === 'single' ? input.ownerId! : input.assignmentMode === 'round_robin' ? input.assigneeIds![resultIndex % input.assigneeIds!.length] : input.manualAssignments![result.id];
+    const owner = memberById.get(assigneeId)!.name;
     const duplicate = await auth.db.prepare('SELECT id FROM leads WHERE workspace_id=? AND lower(name)=lower(?) LIMIT 1').bind(auth.session.workspace.id, result.name).first<{ id: string }>();
     if (duplicate) {
       await auth.db.prepare('UPDATE finder_results SET imported_lead_id=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?').bind(duplicate.id, result.id, auth.session.workspace.id).run();
@@ -75,7 +85,7 @@ async function importResults(request: Request, body: unknown) {
     if (!company) {
       company = { id: crypto.randomUUID() };
       await auth.db.prepare('INSERT INTO companies (id,workspace_id,name,industry,city,phone,email,website,owner) VALUES (?,?,?,?,?,?,?,?,?)')
-        .bind(company.id, auth.session.workspace.id, result.name, result.industry, result.city, result.phone, result.email, result.website || null, input.owner).run();
+        .bind(company.id, auth.session.workspace.id, result.name, result.industry, result.city, result.phone, result.email, result.website || null, owner).run();
     }
     let contactId: string | null = null;
     if (result.phone || result.email) {
@@ -87,7 +97,7 @@ async function importResults(request: Request, body: unknown) {
     const next = `Initial follow-up · ${input.followUpDate}`;
     await auth.db.prepare(`INSERT INTO leads (id,workspace_id,company_id,primary_contact_id,version,name,industry,city,status,score,owner,last,next,phone,email,contact,priority,opportunity,archived,created_at,updated_at)
       VALUES (?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`)
-      .bind(leadId, auth.session.workspace.id, company.id, contactId, result.name, result.industry, result.city, input.status, result.score, input.owner, 'Imported from Finder', next, result.phone, result.email, contactId ? 'Public business contact' : '', input.priority, result.opportunity).run();
+      .bind(leadId, auth.session.workspace.id, company.id, contactId, result.name, result.industry, result.city, input.status, result.score, owner, 'Imported from Finder', next, result.phone, result.email, contactId ? 'Public business contact' : '', input.priority, result.opportunity).run();
     await syncLeadCoreCrm(auth.db, auth.session.workspace.id, leadId);
     const opportunity = await auth.db.prepare('SELECT id FROM opportunities WHERE workspace_id=? AND lead_id=? LIMIT 1').bind(auth.session.workspace.id, leadId).first<{ id: string }>();
     if (opportunity && ['complete', 'cached'].includes(result.aiStatus)) {
@@ -98,17 +108,17 @@ async function importResults(request: Request, body: unknown) {
     }
     await auth.db.prepare(`INSERT INTO tasks (uid,workspace_id,id,title,lead,lead_id,company_id,contact_id,owner,priority,due,due_at,time,type,notes,status,reminder,recurrence,version,created_at,updated_at)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`)
-      .bind(crypto.randomUUID(), auth.session.workspace.id, nextTaskId++, 'Initial follow-up', result.name, leadId, company.id, contactId, input.owner, input.priority, input.followUpDate, input.followUpDate, '09:00', 'Call', `Imported from ${result.provider}.`, 'Scheduled', '15 minutes before', 'None').run();
+      .bind(crypto.randomUUID(), auth.session.workspace.id, nextTaskId++, 'Initial follow-up', result.name, leadId, company.id, contactId, owner, input.priority, input.followUpDate, input.followUpDate, '09:00', 'Call', `Imported from ${result.provider}.`, 'Scheduled', '15 minutes before', 'None').run();
     await auth.db.prepare(`INSERT INTO activities (uid,workspace_id,id,lead,lead_id,company_id,contact_id,type,detail,time,owner,status,occurred_at,outcome,version,created_at,updated_at)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`)
-      .bind(crypto.randomUUID(), auth.session.workspace.id, nextActivityId++, result.name, leadId, company.id, contactId, 'Finder import', `Imported from ${result.provider} · ${result.sourceUrl}`, 'Just now', input.owner, 'Completed', new Date().toISOString(), 'Imported').run();
+      .bind(crypto.randomUUID(), auth.session.workspace.id, nextActivityId++, result.name, leadId, company.id, contactId, 'Finder import', `Imported from ${result.provider} · ${result.sourceUrl}`, 'Just now', owner, 'Completed', new Date().toISOString(), 'Imported').run();
     await auth.db.prepare('UPDATE finder_results SET imported_lead_id=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?').bind(leadId, result.id, auth.session.workspace.id).run();
     const saved = await auth.db.prepare('SELECT * FROM leads WHERE id=? AND workspace_id=?').bind(leadId, auth.session.workspace.id).first<Record<string, unknown>>();
-    if (saved) imported.push(mapLead(saved));
+    if (saved) { imported.push(mapLead(saved)); assignmentCounts.set(assigneeId, (assignmentCounts.get(assigneeId) || 0) + 1); }
   }
   const count = await auth.db.prepare('SELECT COUNT(*) total FROM finder_results WHERE search_id=? AND workspace_id=? AND imported_lead_id IS NOT NULL').bind(input.searchId, auth.session.workspace.id).first<{ total: number }>();
   await auth.db.prepare('UPDATE finder_searches SET imported_count=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?').bind(Number(count?.total || 0), input.searchId, auth.session.workspace.id).run();
-  return Response.json({ imported, skipped: resultRows.results.length - imported.length });
+  return Response.json({ imported, skipped: resultRows.results.length - imported.length, assignments: [...assignmentCounts].map(([userId, count]) => ({ userId, name: memberById.get(userId)?.name, count })) });
 }
 
 export async function POST(request: Request) {

@@ -86,4 +86,13 @@ describe('Finder input validation', () => {
     expect(finderSearchSchema.safeParse({ action: 'run', industry: 'Dental clinics', location: 'Cebu City', targetCount: 100, requirements: [] }).success).toBe(false);
     expect(finderImportSchema.safeParse({ action: 'import', searchId: crypto.randomUUID(), resultIds: [], owner: 'Shaun', priority: 'Medium', status: 'New', followUpDate: '2026-09-02' }).success).toBe(false);
   });
+
+  it('validates single-owner, round-robin, and manual assignments', () => {
+    const resultIds = [crypto.randomUUID(), crypto.randomUUID()];
+    const shared = { action: 'import' as const, searchId: crypto.randomUUID(), resultIds, priority: 'Medium' as const, status: 'New' as const, followUpDate: '2026-09-10' };
+    expect(finderImportSchema.safeParse({ ...shared, assignmentMode: 'single', ownerId: 'cloudflare:user-1' }).success).toBe(true);
+    expect(finderImportSchema.safeParse({ ...shared, assignmentMode: 'round_robin', assigneeIds: ['cloudflare:user-1', 'cloudflare:user-2'] }).success).toBe(true);
+    expect(finderImportSchema.safeParse({ ...shared, assignmentMode: 'manual', manualAssignments: Object.fromEntries(resultIds.map((id, index) => [id, `cloudflare:user-${index + 1}`])) }).success).toBe(true);
+    expect(finderImportSchema.safeParse({ ...shared, assignmentMode: 'manual', manualAssignments: { [resultIds[0]]: 'cloudflare:user-1' } }).success).toBe(false);
+  });
 });

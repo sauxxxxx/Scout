@@ -127,11 +127,18 @@ export const finderImportSchema = z.object({
   action: z.literal('import'),
   searchId: recordId,
   resultIds: z.array(recordId).min(1).max(60),
-  owner: z.string().trim().min(1).max(120),
+  assignmentMode: z.enum(['single', 'round_robin', 'manual']),
+  ownerId: z.string().trim().min(1).max(240).optional(),
+  assigneeIds: z.array(z.string().trim().min(1).max(240)).max(100).optional(),
+  manualAssignments: z.record(recordId, z.string().trim().min(1).max(240)).optional(),
   priority: z.enum(['Low', 'Medium', 'High']),
   status: z.enum(['New', 'Contacted', 'Interested']),
   followUpDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-}).strict();
+}).strict().superRefine((value, context) => {
+  if (value.assignmentMode === 'single' && !value.ownerId) context.addIssue({ code: 'custom', path: ['ownerId'], message: 'Select an owner.' });
+  if (value.assignmentMode === 'round_robin' && !value.assigneeIds?.length) context.addIssue({ code: 'custom', path: ['assigneeIds'], message: 'Select at least one assignee.' });
+  if (value.assignmentMode === 'manual' && value.resultIds.some(id => !value.manualAssignments?.[id])) context.addIssue({ code: 'custom', path: ['manualAssignments'], message: 'Assign every selected business.' });
+});
 
 export const finderAiRetrySchema = z.object({
   action: z.literal('retry-ai'),

@@ -61,20 +61,24 @@ export async function authenticateRequest(request: Request, permission: Workspac
       ...(invitedMembership ? [db.prepare('INSERT INTO workspace_memberships (workspace_id,user_id,role,updated_at) VALUES (?,?,?,CURRENT_TIMESTAMP)').bind(DEFAULT_WORKSPACE_ID, identity.id, invitedMembership.role)] : []),
     ]);
   }
-  await db.prepare(`INSERT INTO users (id,email,name,avatar_url,updated_at) VALUES (?,?,?,?,CURRENT_TIMESTAMP)
-    ON CONFLICT(id) DO UPDATE SET email=excluded.email,name=excluded.name,avatar_url=excluded.avatar_url,updated_at=CURRENT_TIMESTAMP`)
+  await db.prepare(`INSERT INTO users (id,email,name,avatar_url,status,last_seen_at,updated_at) VALUES (?,?,?,?, 'active',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+    ON CONFLICT(id) DO UPDATE SET email=excluded.email,name=excluded.name,avatar_url=excluded.avatar_url,last_seen_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP`)
     .bind(identity.id, identity.email, identity.name, identity.avatarUrl || null).run();
+
+  const account = await db.prepare('SELECT status FROM users WHERE id=?').bind(identity.id).first<{ status: string }>();
+  if (account?.status === 'disabled') return { ok: false, response: Response.json({ error: 'This Scout account has been disabled.' }, { status: 403 }) };
 
   let membership = await db.prepare(`SELECT m.role,w.name workspace_name FROM workspace_memberships m JOIN workspaces w ON w.id=m.workspace_id WHERE m.workspace_id=? AND m.user_id=?`)
     .bind(DEFAULT_WORKSPACE_ID, identity.id).first<{ role: WorkspaceRole; workspace_name: string }>();
 
   if (!membership) {
-    const invited = await db.prepare(`SELECT m.user_id,m.role FROM workspace_memberships m JOIN users u ON u.id=m.user_id WHERE m.workspace_id=? AND lower(u.email)=lower(?)`)
-      .bind(DEFAULT_WORKSPACE_ID, identity.email).first<{ user_id: string; role: WorkspaceRole }>();
+    await db.prepare("UPDATE workspace_invitations SET status='expired',updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND status='pending' AND expires_at<CURRENT_TIMESTAMP").bind(DEFAULT_WORKSPACE_ID).run();
+    const invited = await db.prepare(`SELECT id,role FROM workspace_invitations WHERE workspace_id=? AND lower(email)=lower(?) AND status='pending' AND expires_at>=CURRENT_TIMESTAMP ORDER BY created_at DESC LIMIT 1`)
+      .bind(DEFAULT_WORKSPACE_ID, identity.email).first<{ id: string; role: WorkspaceRole }>();
     if (invited) {
       await db.batch([
-        db.prepare('DELETE FROM workspace_memberships WHERE workspace_id=? AND user_id=?').bind(DEFAULT_WORKSPACE_ID, invited.user_id),
         db.prepare('INSERT OR REPLACE INTO workspace_memberships (workspace_id,user_id,role,updated_at) VALUES (?,?,?,CURRENT_TIMESTAMP)').bind(DEFAULT_WORKSPACE_ID, identity.id, invited.role),
+        db.prepare("UPDATE workspace_invitations SET status='accepted',accepted_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(invited.id),
       ]);
       membership = { role: invited.role, workspace_name: 'Sales workspace' };
     }

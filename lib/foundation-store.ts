@@ -8,6 +8,8 @@ const createUsersTable = `CREATE TABLE IF NOT EXISTS users (
   email TEXT NOT NULL UNIQUE COLLATE NOCASE,
   name TEXT NOT NULL,
   avatar_url TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  last_seen_at TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 )`;
@@ -28,6 +30,20 @@ const createMembershipsTable = `CREATE TABLE IF NOT EXISTS workspace_memberships
   PRIMARY KEY (workspace_id, user_id),
   FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+)`;
+
+const createInvitationsTable = `CREATE TABLE IF NOT EXISTS workspace_invitations (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
+  email TEXT NOT NULL COLLATE NOCASE,
+  name TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('owner','admin','member','viewer')),
+  invited_by TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','accepted','revoked','expired')),
+  expires_at TEXT NOT NULL,
+  accepted_at TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 )`;
 
 async function columns(db: D1Database, table: string) {
@@ -55,6 +71,7 @@ export async function ensureFoundationSchema(db: D1Database) {
     db.prepare(createUsersTable),
     db.prepare(createWorkspacesTable),
     db.prepare(createMembershipsTable),
+    db.prepare(createInvitationsTable),
     db.prepare(createActivitiesTable),
     db.prepare(createLeadsTable),
     db.prepare(createTasksTable),
@@ -74,6 +91,8 @@ export async function ensureFoundationSchema(db: D1Database) {
     db.prepare(createFinderAiUsageIndex),
     db.prepare(createOpportunityFinderAssessmentsIndex),
   ]);
+
+  await addColumns(db, 'users', { status: "TEXT NOT NULL DEFAULT 'active'", last_seen_at: 'TEXT' });
 
   await addColumns(db, 'leads', {
     id: 'TEXT', workspace_id: 'TEXT', company_id: 'TEXT', primary_contact_id: 'TEXT', version: 'INTEGER NOT NULL DEFAULT 1', created_at: 'TEXT',
@@ -102,6 +121,8 @@ export async function ensureFoundationSchema(db: D1Database) {
     db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_activities_stable_id ON activities(uid)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_activities_workspace ON activities(workspace_id, updated_at)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_memberships_workspace ON workspace_memberships(workspace_id, role)'),
+    db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_workspace_invites_pending_email ON workspace_invitations(workspace_id,email) WHERE status='pending'"),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_workspace_invites_workspace_status ON workspace_invitations(workspace_id,status,created_at)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_companies_workspace_name ON companies(workspace_id, name)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_contacts_company ON contacts(workspace_id, company_id, archived)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_opportunities_stage ON opportunities(workspace_id, stage, archived)'),
