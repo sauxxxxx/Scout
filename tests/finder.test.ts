@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assessPlace } from '@/lib/finder-store';
+import { assessPlace, matchesRequirements } from '@/lib/finder-store';
 import { calibrateAssessment, createGeminiProvider, finderAiAssessmentSchema, finderAiInputHash, geminiCostMicroUsd, withinBudget, type FinderAiAssessment, type FinderAiInput } from '@/lib/finder-ai';
 import { finderImportSchema, finderSearchSchema } from '@/lib/validation';
 
@@ -15,6 +15,12 @@ describe('Finder qualification', () => {
     expect(result.opportunity).toBe('Website launch');
     expect(result.score).toBeGreaterThanOrEqual(90);
     expect(result.scoreReason).toContain('no website found');
+  });
+
+  it('qualifies a business when any selected contact field is available', () => {
+    const phoneOnly = { phone: '+63 917 000 0000', website: '', email: '', socialUrl: '' };
+    expect(matchesRequirements(phoneOnly, ['Phone', 'Email'])).toBe(true);
+    expect(matchesRequirements(phoneOnly, ['Email', 'Social'])).toBe(false);
   });
 });
 

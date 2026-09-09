@@ -115,7 +115,7 @@ export const finderSearchSchema = z.object({
   industry: z.string().trim().min(2).max(120).optional(),
   location: z.string().trim().min(2).max(160).optional(),
   targetCount: z.number().int().min(1).max(60).optional(),
-  requirements: z.array(z.enum(finderRequirements)).max(finderRequirements.length).optional(),
+  requirements: z.array(z.enum(finderRequirements)).min(1).max(finderRequirements.length).optional(),
 }).strict().superRefine((value, context) => {
   if (value.searchId) return;
   if (!value.industry) context.addIssue({ code: 'custom', path: ['industry'], message: 'Industry is required.' });

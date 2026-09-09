@@ -84,7 +84,7 @@ function confidenceOf(result: FinderResult) {
 }
 
 function hasRequirements(result: FinderResult, requirements: string[]) {
-  return requirements.every((item) => item === 'Phone' ? Boolean(result.phone)
+  return requirements.some((item) => item === 'Phone' ? Boolean(result.phone)
     : item === 'Website' ? Boolean(result.website)
       : item === 'Email' ? Boolean(result.email)
         : item === 'Social' ? Boolean(result.socialUrl) : true);
@@ -348,7 +348,7 @@ export function FinderWorkspace({ notify, leads, onImportedLeads, setPage, finde
     <section className="finder-search-card">
       <div className="finder-search-card-head"><div><span>New search</span><strong>Define your ideal business</strong></div></div>
       <div className="finder-search-fields"><label><span>Industry</span><input value={criteria.industry} onChange={(event) => setCriteria({ ...criteria, industry: event.target.value })} placeholder="e.g. Dental clinics" /></label><label><span>Location</span><div><FiMapPin /><input value={criteria.location} onChange={(event) => setCriteria({ ...criteria, location: event.target.value })} placeholder="City or region" /></div></label><label><span>Lead count</span><select value={criteria.count} onChange={(event) => setCriteria({ ...criteria, count: event.target.value })}><option>10</option><option>20</option><option>40</option><option>60</option></select></label></div>
-      <div className="finder-requirement-grid"><div><span>Required information</span><small>Only businesses containing every selected field will qualify.</small></div>{['Phone', 'Website', 'Email', 'Social'].map((item) => <button className={requirements.includes(item) ? 'active' : ''} onClick={() => setRequirements((current) => current.includes(item) ? current.filter((value) => value !== item) : [...current, item])} key={item}>{item === 'Phone' ? <FiPhone /> : item === 'Email' ? <FiMail /> : <FiGlobe />}{item}{requirements.includes(item) && <FiCheck />}</button>)}</div>
+      <div className="finder-requirement-grid"><div><span>Required information</span><small>Businesses containing any selected field will qualify.</small></div>{['Phone', 'Website', 'Email', 'Social'].map((item) => <button className={requirements.includes(item) ? 'active' : ''} onClick={() => setRequirements((current) => current.includes(item) ? current.length === 1 ? current : current.filter((value) => value !== item) : [...current, item])} key={item}>{item === 'Phone' ? <FiPhone /> : item === 'Email' ? <FiMail /> : <FiGlobe />}{item}{requirements.includes(item) && <FiCheck />}</button>)}</div>
       <footer><span className="finder-search-estimate">Estimated AI cost: under ${(Number(criteria.count) * 0.001).toFixed(2)} · hard monthly limit ${aiUsage.budgetUsd.toFixed(2)}</span><button className="secondary" disabled={busy} onClick={saveDraft}><FiSave /> Save search</button><button className="primary" disabled={busy} onClick={() => runSearch()}>{starting ? <><Spinner /> Starting search…</> : <><FiSearch /> Find leads</>}</button></footer>
     </section>
     <section className="finder-recent"><div className="finder-section-title"><div><h2>Recent searches</h2><p>Continue reviewing results or run a previous search again.</p></div><button onClick={() => setFinderView('Search history')}>View all <FiChevronRight /></button></div>{loading ? <div className="finder-loading"><Spinner /> Loading recent searches…</div> : historyTable(searches.slice(0, 4))}</section>

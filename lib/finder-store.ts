@@ -200,8 +200,8 @@ export function assessPlace(place: GooglePlace, evidence = { email: '', socialUr
   return { score: Math.min(98, score), scoreReason: reasons.length ? reasons.join(', ') : 'Public business listing matched the search', opportunity };
 }
 
-function matchesRequirements(result: { phone: string; website: string; email: string; socialUrl: string }, requirements: string[]) {
-  return requirements.every(requirement => requirement === 'Phone' ? Boolean(result.phone)
+export function matchesRequirements(result: { phone: string; website: string; email: string; socialUrl: string }, requirements: string[]) {
+  return requirements.some(requirement => requirement === 'Phone' ? Boolean(result.phone)
     : requirement === 'Website' ? Boolean(result.website)
       : requirement === 'Email' ? Boolean(result.email)
         : requirement === 'Social' ? Boolean(result.socialUrl) : true);
