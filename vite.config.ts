@@ -17,6 +17,7 @@ const localBindingConfig = {
   main: './worker.ts',
   compatibility_flags: ['nodejs_compat'],
   vars: {
+    AUTH_PROVIDER: 'cloudflare-access',
     GEMINI_MODEL: 'gemini-3.1-flash-lite',
     FINDER_AI_MONTHLY_BUDGET_USD: '2',
     FINDER_AI_MAX_CANDIDATES: '20',

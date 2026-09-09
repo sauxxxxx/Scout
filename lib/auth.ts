@@ -36,7 +36,16 @@ function requestIdentity(request: Request): Identity | null {
 export async function authenticateRequest(request: Request, permission: WorkspacePermission = 'records:read'): Promise<AuthResult> {
   const identity = requestIdentity(request);
   if (!identity) {
-    return { ok: false, response: Response.json({ error: 'Authentication required.', signInPath: '/signin-with-chatgpt?return_to=/' }, { status: 401 }) };
+    const cloudflareAccess = request.headers.get('x-scout-auth-provider') === 'cloudflare-access';
+    return {
+      ok: false,
+      response: Response.json(
+        cloudflareAccess
+          ? { error: 'Scout access is not enabled yet. Ask the workspace owner to finish Cloudflare Access setup.', signInPath: null }
+          : { error: 'Authentication required.', signInPath: '/signin-with-chatgpt?return_to=/' },
+        { status: 401 },
+      ),
+    };
   }
 
   const db = workspaceDb();
