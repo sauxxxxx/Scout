@@ -1092,6 +1092,27 @@ input[type="checkbox"]:checked { transform:scale(1.06); }
   .loading-skeleton { animation:none; background:#eceeef; }
 }
 
+/* Finder clarity refinements */
+.sub-context button { display:flex; align-items:center; gap:9px; padding:0; border:0; background:transparent; color:#7a8582; font:inherit; }
+.sub-context button::after { content:'/'; color:#c0c7c4; }
+.sub-context button:hover { color:var(--ink); }
+.secondary { display:inline-flex; align-items:center; justify-content:center; gap:7px; }
+.finder-page-head h1,.finder-insight-drawer h2,.finder-import-dialog h2 { margin-top:0; }
+.finder-run-actions { overflow:visible; }
+.finder-run-actions button { position:relative; }
+.finder-run-actions button[data-tooltip]:hover::after,.finder-run-actions button[data-tooltip]:focus-visible::after { content:attr(data-tooltip); position:absolute; z-index:30; left:50%; bottom:calc(100% + 7px); width:max-content; max-width:150px; transform:translateX(-50%); padding:6px 8px; border-radius:3px; background:#1b2022; color:#fff; font-size:9px; font-weight:500; line-height:1; pointer-events:none; box-shadow:0 5px 14px rgba(15,22,24,.18); }
+.finder-run-actions button:last-child[data-tooltip]:hover::after,.finder-run-actions button:last-child[data-tooltip]:focus-visible::after { left:auto; right:0; transform:none; }
+.finder-kpis { display:flex; align-items:center; gap:30px; margin:0 0 14px; padding:8px 2px 14px; border-top:0; border-bottom:1px solid #e0e4e3; }
+.finder-kpis>div { min-height:38px; display:flex; align-items:center; gap:8px; padding:0; border:0; }
+.finder-kpis i,.finder-kpis i.blue,.finder-kpis i.green,.finder-kpis i.violet,.finder-kpis i.amber { width:auto; height:auto; display:grid; place-items:center; flex:0 0 auto; border-radius:0; background:transparent; color:#75817e; font-size:14px; }
+.finder-kpis span,.finder-kpis strong { display:block; }
+.finder-kpis strong { margin-bottom:2px; color:var(--ink); font-size:15px; }
+.finder-kpis span { color:#717c7f; font-size:9px; }
+.finder-intelligence-row>div:first-of-type>small { display:flex; align-items:center; gap:4px; }
+.finder-intelligence-row>div:first-of-type>small svg { flex:0 0 auto; margin:0; }
+@media(max-width:1150px){.finder-kpis{display:flex;flex-wrap:wrap}.finder-kpis>div:nth-child(3){border:0}}
+@media(max-width:800px){.finder-kpis{display:flex;gap:12px 22px}.finder-kpis>div{border:0!important}}
+
 /* Finder intelligence workflow */
 .finder-workspace { --finder-blue:#eaf4fb; --finder-green:#e8f5ef; --finder-violet:#f0ecfa; --finder-amber:#fbf2de; min-width:0; padding:3px 0 72px; animation:scout-fade-in var(--motion-fast) linear both; }
 .finder-page-head { min-height:86px; display:flex; align-items:flex-start; justify-content:space-between; gap:28px; padding:0 2px 24px; }
