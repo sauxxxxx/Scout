@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/auth';
 import { activityFiles, mapActivity } from '@/lib/activity-store';
+import { recordAudit } from '@/lib/audit';
+import { guardRecord, seesOnlyOwnRecords, visibleLeadIds } from '@/lib/record-scope';
+import { isoInZone } from '@/lib/task-dates';
 import { activityInputSchema, validationError } from '@/lib/validation';
 
 export const dynamic = 'force-dynamic';
@@ -20,6 +23,13 @@ export async function GET(request: Request) {
 
   const params = new URL(request.url).searchParams;
   const all = params.get('all') === '1';
+  const uid = params.get('uid');
+  if (uid) {
+    const blocked = await guardRecord(auth, 'activity', uid);
+    if (blocked) return blocked;
+    const row = await db.prepare('SELECT * FROM activities WHERE uid=? AND workspace_id=?').bind(uid, session.workspace.id).first<Parameters<typeof mapActivity>[0]>();
+    return row ? NextResponse.json({ activity: mapActivity(row) }) : NextResponse.json({ error: 'Activity not found.' }, { status: 404 });
+  }
   const page = Math.max(1, Number(params.get('page')) || 1);
   const pageSize = Math.min(50, Math.max(1, Number(params.get('pageSize')) || 6));
   const clauses: string[] = ['workspace_id = ?'];
@@ -37,19 +47,36 @@ export async function GET(request: Request) {
   exact('type', 'type', 'All activity');
   exact('owner', 'owner', 'Entire team');
   exact('lead', 'lead', 'All leads');
+  exact('leadId', 'lead_id', '');
+  exact('companyId', 'company_id', '');
+  const since = params.get('since');
+  if (since) { clauses.push('updated_at>=?'); queryValues.push(since); }
   const query = params.get('query')?.trim();
   if (query) { clauses.push("LOWER(lead || ' ' || detail || ' ' || COALESCE(subject,'') || ' ' || COALESCE(outcome,'')) LIKE ?"); queryValues.push(`%${query.toLowerCase()}%`); }
   const period = params.get('period');
   const from = params.get('from');
   const to = params.get('to');
-  if (period === 'Today') clauses.push("date(occurred_at)=date('now','localtime')");
-  if (period === 'This week') clauses.push("date(occurred_at) BETWEEN date('now','localtime',printf('-%d days',(CAST(strftime('%w','now','localtime') AS INTEGER)+6)%7)) AND date('now','localtime',printf('+%d days',6-((CAST(strftime('%w','now','localtime') AS INTEGER)+6)%7)))");
-  if (period === 'This month') clauses.push("strftime('%Y-%m',occurred_at)=strftime('%Y-%m','now','localtime')");
+  const today = isoInZone(session.timezone);
+  if (period === 'Today') { clauses.push('date(occurred_at)=date(?)'); queryValues.push(today); }
+  if (period === 'This week') {
+    const start = new Date(`${today}T12:00:00Z`);
+    start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7));
+    const end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 6);
+    clauses.push('date(occurred_at) BETWEEN date(?) AND date(?)');
+    queryValues.push(start.toISOString().slice(0, 10), end.toISOString().slice(0, 10));
+  }
+  if (period === 'This month') { clauses.push("strftime('%Y-%m',occurred_at)=?"); queryValues.push(today.slice(0, 7)); }
   if (period === 'Custom range' && from) { clauses.push('date(occurred_at)>=date(?)'); queryValues.push(from); }
   if (period === 'Custom range' && to) { clauses.push('date(occurred_at)<=date(?)'); queryValues.push(to); }
+  if (seesOnlyOwnRecords(session)) {
+    const leadIds = [...await visibleLeadIds(db, session.workspace.id, session.user.name)];
+    clauses.push(`(owner = ?${leadIds.length ? ` OR lead_id IN (${leadIds.map(() => '?').join(',')})` : ''})`);
+    queryValues.push(session.user.name, ...leadIds);
+  }
   const where = `WHERE ${clauses.join(' AND ')}`;
   const count = await db.prepare(`SELECT COUNT(*) total FROM activities ${where}`).bind(...queryValues).first<{ total: number }>();
-  const sql = `SELECT * FROM activities ${where} ORDER BY COALESCE(occurred_at, created_at) ${scope === 'Scheduled' ? 'ASC' : 'DESC'}, id DESC${all ? '' : ' LIMIT ? OFFSET ?'}`;
+  const sql = `SELECT * FROM activities ${where} ORDER BY COALESCE(occurred_at, created_at) ${scope === 'Scheduled' ? 'ASC' : 'DESC'}, id DESC${all ? ' LIMIT 300' : ' LIMIT ? OFFSET ?'}`;
   const boundValues = all ? queryValues : [...queryValues, pageSize, (page - 1) * pageSize];
   const result = await db.prepare(sql).bind(...boundValues).all();
   return NextResponse.json({ activities: (result.results as unknown as Parameters<typeof mapActivity>[0][]).map(mapActivity), total: Number(count?.total || 0), page, pageSize });
@@ -63,6 +90,7 @@ export async function POST(request: Request) {
   const activity = parsed.data;
   const uid = activity.uid || crypto.randomUUID();
   const linked=await relationships(auth.db,auth.session.workspace.id,activity);if(!linked.leadId)return NextResponse.json({error:'The selected lead does not exist in this workspace.'},{status:422});
+  const blocked=await guardRecord(auth,'lead',linked.leadId);if(blocked)return blocked;
   await auth.db.prepare(`INSERT INTO activities (uid,workspace_id,id,version,lead,lead_id,company_id,contact_id,opportunity_id,type,detail,time,owner,status,occurred_at,outcome,duration,subject,value,document_link,attachment_key,attachment_name,related_task_id,related_task_uid,opportunity,deleted_at,updated_at) VALUES (?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)`)
     .bind(uid, auth.session.workspace.id, activity.id, ...values(activity,linked as {leadId:string;companyId:string;contactId?:string;opportunityId?:string;taskUid?:string})).run();
   const row = await auth.db.prepare('SELECT * FROM activities WHERE uid=? AND workspace_id=?').bind(uid, auth.session.workspace.id).first<Parameters<typeof mapActivity>[0]>();
@@ -76,22 +104,31 @@ export async function PATCH(request: Request) {
   if (!parsed.success) return validationError(parsed.error);
   const activity = parsed.data;
   if (!activity.uid || !activity.version) return NextResponse.json({ error: 'Stable ID and version are required.' }, { status: 400 });
+  const blocked = await guardRecord(auth, 'activity', activity.uid);
+  if (blocked) return blocked;
+  if (activity.deletedAt && !auth.session.capabilities['records:delete']) {
+    const current = await auth.db.prepare('SELECT deleted_at FROM activities WHERE uid=? AND workspace_id=?').bind(activity.uid, auth.session.workspace.id).first<{ deleted_at: string | null }>();
+    if (!current?.deleted_at) return NextResponse.json({ error: 'Your role does not allow deleting records.' }, { status: 403 });
+  }
   const linked=await relationships(auth.db,auth.session.workspace.id,activity);if(!linked.leadId)return NextResponse.json({error:'The selected lead does not exist in this workspace.'},{status:422});
   const result = await auth.db.prepare(`UPDATE activities SET ${columns},version=version+1,updated_at=CURRENT_TIMESTAMP WHERE uid=? AND workspace_id=? AND version=?`)
     .bind(...values(activity,linked as {leadId:string;companyId:string;contactId?:string;opportunityId?:string;taskUid?:string}), activity.uid, auth.session.workspace.id, activity.version).run();
-  if (!result.meta.changes) return NextResponse.json({ error: 'This activity changed elsewhere. Refresh and try again.' }, { status: 409 });
+  if (!result.meta.changes) return NextResponse.json({ error: 'This activity changed elsewhere. Refresh and try again.', conflict: true }, { status: 409 });
   const row = await auth.db.prepare('SELECT * FROM activities WHERE uid=? AND workspace_id=?').bind(activity.uid, auth.session.workspace.id).first<Parameters<typeof mapActivity>[0]>();
   return NextResponse.json({ activity: mapActivity(row!) });
 }
 
 export async function DELETE(request: Request) {
-  const auth = await authenticateRequest(request, 'records:write');
+  const auth = await authenticateRequest(request, 'records:delete');
   if (!auth.ok) return auth.response;
   const uid = new URL(request.url).searchParams.get('id');
   if (!uid) return NextResponse.json({ error: 'Stable activity ID is required.' }, { status: 400 });
+  const blocked = await guardRecord(auth, 'activity', uid);
+  if (blocked) return blocked;
   const row = await auth.db.prepare('SELECT attachment_key FROM activities WHERE uid=? AND workspace_id=?').bind(uid, auth.session.workspace.id).first<{ attachment_key: string | null }>();
   if (!row) return NextResponse.json({ error: 'Activity not found.' }, { status: 404 });
   if (row.attachment_key) await activityFiles().delete(row.attachment_key);
   await auth.db.prepare('DELETE FROM activities WHERE uid=? AND workspace_id=?').bind(uid, auth.session.workspace.id).run();
+  await recordAudit(auth, 'activity.deleted', uid);
   return NextResponse.json({ deleted: uid });
 }

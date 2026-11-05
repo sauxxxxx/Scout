@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "scout",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["node_modules/vinext/dist/cli.js", "dev", "--port", "3000"],
+      "port": 3000
+    },
+    {
+      "name": "scout-production",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["node_modules/vite/bin/vite.js", "preview", "--port", "3000", "--strictPort"],
+      "port": 3000
+    }
+  ]
+}

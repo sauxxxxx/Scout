@@ -3,10 +3,14 @@ import type { FinderJobMessage, FinderRuntimeConfig } from '@/lib/finder-store';
 export type FinderEnv = {
   DB: D1Database;
   FINDER_QUEUE?: Queue<FinderJobMessage>;
-  AUTH_PROVIDER?: 'cloudflare-access' | 'openai-sites';
+  AUTH_PROVIDER?: 'cloudflare-access' | 'openai-sites' | 'scout';
   CLOUDFLARE_ACCESS_TEAM_DOMAIN?: string;
+  GOOGLE_OAUTH_CLIENT_ID?: string;
   GOOGLE_PLACES_API_KEY?: string;
   GEMINI_API_KEY?: string;
+  RESEND_API_KEY?: string;
+  SCOUT_EMAIL_FROM?: string;
+  SCOUT_PUBLIC_URL?: string;
   GEMINI_MODEL?: string;
   FINDER_AI_MONTHLY_BUDGET_USD?: string;
   FINDER_AI_MAX_CANDIDATES?: string;

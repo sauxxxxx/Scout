@@ -1,13 +1,12 @@
-import { sites } from '@openai/sites-vite-plugin';
 import tailwindcss from '@tailwindcss/postcss';
 import vinext from 'vinext';
 import { defineConfig } from 'vite';
-import hostingConfig from './.openai/hosting.json';
 
 const SCOUT_D1_DATABASE_ID =
   '2432f6c6-851b-4097-9e0d-d7f2a1e5ca82';
 
-const { d1, r2 } = hostingConfig;
+const d1 = 'DB';
+const r2 = 'FILES';
 
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === 'seatbelt';
@@ -15,11 +14,11 @@ const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === 'seatbelt';
 const localBindingConfig = {
   name: 'scout',
   main: './worker.ts',
-  compatibility_date: '2026-09-09',
+  compatibility_date: '2026-05-15',
   compatibility_flags: ['nodejs_compat'],
   vars: {
-    AUTH_PROVIDER: 'cloudflare-access',
-    CLOUDFLARE_ACCESS_TEAM_DOMAIN: 'tiny-glade-7569.cloudflareaccess.com',
+    AUTH_PROVIDER: 'scout',
+    SCOUT_PUBLIC_URL: 'https://scoutcrm.pages.dev',
     GEMINI_MODEL: 'gemini-3.1-flash-lite',
     FINDER_AI_MONTHLY_BUDGET_USD: '2',
     FINDER_AI_MAX_CANDIDATES: '20',
@@ -47,7 +46,7 @@ const localBindingConfig = {
   },
 };
 
-export default defineConfig(async () => {
+export default defineConfig(async ({ command }) => {
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
   // settings; application environment belongs in ignored `.env*` files.
   process.env.WRANGLER_WRITE_LOGS ??= 'false';
@@ -58,13 +57,13 @@ export default defineConfig(async () => {
   const { cloudflare } = await import('@cloudflare/vite-plugin');
 
   return {
+    define: { __SCOUT_DEV_SERVER__: JSON.stringify(command === 'serve') },
     css: { postcss: { plugins: [tailwindcss()] } },
     server: isCodexSeatbeltSandbox
       ? { watch: { useFsEvents: false, usePolling: true } }
       : undefined,
     plugins: [
       vinext(),
-      sites(),
       cloudflare({
         viteEnvironment: { name: 'rsc', childEnvironments: ['ssr'] },
         config: localBindingConfig,

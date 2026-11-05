@@ -1,0 +1,12 @@
+ALTER TABLE finder_searches ADD COLUMN sales_focus TEXT NOT NULL DEFAULT 'Website & booking';
+ALTER TABLE finder_searches ADD COLUMN requirement_mode TEXT NOT NULL DEFAULT 'all';
+ALTER TABLE finder_results ADD COLUMN facebook_research_json TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE finder_results ADD COLUMN review_version INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE leads ADD COLUMN finder_provider TEXT;
+ALTER TABLE leads ADD COLUMN finder_record_id TEXT;
+ALTER TABLE leads ADD COLUMN business_address TEXT NOT NULL DEFAULT '';
+ALTER TABLE companies ADD COLUMN finder_provider TEXT;
+ALTER TABLE companies ADD COLUMN finder_record_id TEXT;
+ALTER TABLE companies ADD COLUMN business_address TEXT NOT NULL DEFAULT '';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_finder_identity ON leads(workspace_id, finder_provider, finder_record_id) WHERE finder_provider IS NOT NULL AND finder_record_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_companies_finder_identity ON companies(workspace_id, finder_provider, finder_record_id);

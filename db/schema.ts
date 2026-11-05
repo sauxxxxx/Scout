@@ -34,7 +34,8 @@ ON activities(lead)
 
 export const createLeadsTable = `
 CREATE TABLE IF NOT EXISTS leads (
-  name TEXT PRIMARY KEY,
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
   industry TEXT NOT NULL,
   city TEXT NOT NULL,
   status TEXT NOT NULL,
@@ -89,6 +90,13 @@ CREATE TABLE IF NOT EXISTS companies (
   phone TEXT NOT NULL DEFAULT '',
   email TEXT NOT NULL DEFAULT '',
   website TEXT,
+  facebook_url TEXT,
+  facebook_status TEXT NOT NULL DEFAULT 'not_found',
+  facebook_reviewed_at TEXT,
+  facebook_research_json TEXT NOT NULL DEFAULT '{}',
+  finder_provider TEXT,
+  finder_record_id TEXT,
+  business_address TEXT NOT NULL DEFAULT '',
   owner TEXT NOT NULL,
   archived INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -138,6 +146,14 @@ CREATE TABLE IF NOT EXISTS opportunities (
 
 export const createFinderSearchesTable = `
 CREATE TABLE IF NOT EXISTS finder_searches (
+  map_area_json TEXT,
+  map_bounds_json TEXT,
+  location_code TEXT,
+  location_type TEXT,
+  location_province TEXT,
+  location_region TEXT,
+  industry_type TEXT,
+  industry_psic_code TEXT,
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL,
   created_by TEXT NOT NULL,
@@ -146,6 +162,8 @@ CREATE TABLE IF NOT EXISTS finder_searches (
   location TEXT NOT NULL,
   target_count INTEGER NOT NULL,
   requirements_json TEXT NOT NULL DEFAULT '[]',
+  sales_focus TEXT NOT NULL DEFAULT 'Website & booking',
+  requirement_mode TEXT NOT NULL DEFAULT 'all',
   provider TEXT NOT NULL DEFAULT 'Google Places',
   status TEXT NOT NULL DEFAULT 'Saved',
   progress INTEGER NOT NULL DEFAULT 0,
@@ -163,6 +181,13 @@ CREATE TABLE IF NOT EXISTS finder_searches (
 
 export const createFinderResultsTable = `
 CREATE TABLE IF NOT EXISTS finder_results (
+  latitude REAL,
+  longitude REAL,
+  distance_km REAL,
+  facebook_status TEXT NOT NULL DEFAULT 'not_found',
+  facebook_verified_at TEXT,
+  facebook_research_json TEXT NOT NULL DEFAULT '{}',
+  review_version INTEGER NOT NULL DEFAULT 0,
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL,
   search_id TEXT NOT NULL,

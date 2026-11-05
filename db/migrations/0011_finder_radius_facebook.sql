@@ -1,0 +1,14 @@
+ALTER TABLE finder_searches ADD COLUMN map_area_json TEXT;
+ALTER TABLE finder_searches ADD COLUMN location_code TEXT;
+ALTER TABLE finder_searches ADD COLUMN location_type TEXT;
+ALTER TABLE finder_searches ADD COLUMN location_province TEXT;
+ALTER TABLE finder_searches ADD COLUMN location_region TEXT;
+ALTER TABLE finder_searches ADD COLUMN industry_type TEXT;
+ALTER TABLE finder_searches ADD COLUMN industry_psic_code TEXT;
+ALTER TABLE finder_results ADD COLUMN distance_km REAL;
+ALTER TABLE finder_results ADD COLUMN facebook_status TEXT NOT NULL DEFAULT 'not_found';
+ALTER TABLE finder_results ADD COLUMN facebook_verified_at TEXT;
+ALTER TABLE companies ADD COLUMN facebook_url TEXT;
+ALTER TABLE companies ADD COLUMN facebook_status TEXT NOT NULL DEFAULT 'not_found';
+ALTER TABLE companies ADD COLUMN facebook_reviewed_at TEXT;
+ALTER TABLE companies ADD COLUMN facebook_research_json TEXT NOT NULL DEFAULT '{}';

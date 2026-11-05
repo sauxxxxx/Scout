@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { activityInputSchema, companyInputSchema, contactInputSchema, leadInputSchema, memberInputSchema, opportunityInputSchema, taskInputSchema } from '@/lib/validation';
+import { activityInputSchema, companyInputSchema, contactInputSchema, leadInputSchema, opportunityInputSchema, taskInputSchema } from '@/lib/validation';
+import { invitationInputSchema } from '@/lib/team';
 
 const validLead = {
   name: 'ABC Dental Clinic', industry: 'Dental clinic', city: 'Cebu City', status: 'Interested', score: 91,
@@ -24,8 +25,8 @@ describe('record validation', () => {
 
   it('validates activities and workspace invitations', () => {
     expect(activityInputSchema.safeParse({ id: 1, lead: 'ABC Dental Clinic', type: 'Call', detail: 'Connected', time: 'Today', owner: 'Shaun' }).success).toBe(true);
-    expect(memberInputSchema.safeParse({ name: 'Mika Santos', email: 'mika@example.com', role: 'member' }).success).toBe(true);
-    expect(memberInputSchema.safeParse({ name: 'Mika Santos', email: 'bad', role: 'superuser' }).success).toBe(false);
+    expect(invitationInputSchema.safeParse({ emails: ['mika@example.com'], role: 'member' }).success).toBe(true);
+    expect(invitationInputSchema.safeParse({ emails: ['bad'], role: 'superuser' }).success).toBe(false);
   });
 
   it('validates normalized company, contact, and opportunity records', () => {

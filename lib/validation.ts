@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { workspaceRoles } from '@/lib/permissions';
+import { finderAreaSchema, finderBoundsSchema } from '@/lib/finder-map';
+import { facebookResearchSchema, normalizeFacebookPageUrl, salesFocuses } from '@/lib/finder-sales';
 
 const optionalText = z.string().trim().max(500).optional().nullable();
 const recordId = z.string().uuid();
@@ -29,12 +30,16 @@ export const leadInputSchema = z.object({
   probability: z.number().int().min(0).max(100).optional(),
   closeDate: optionalText,
   archived: z.boolean().optional(),
+  createdAt: optionalText,
 }).strict();
 
 export const companyInputSchema = z.object({
   id: recordId.optional(), version:z.number().int().positive().optional(), name:z.string().trim().min(1).max(160),
   industry:z.string().trim().max(120), city:z.string().trim().max(120), phone:z.string().trim().max(80),
   email:z.union([z.literal(''),z.email().max(254)]), website:z.union([z.literal(''),z.url().max(2000)]).optional().nullable(),
+  facebookUrl:z.union([z.literal(''),z.url().max(2000)]).optional().nullable(),
+  facebookStatus:z.enum(['confirmed','possible','not_found']).optional(),
+  facebookResearch:facebookResearchSchema.safeExtend({ reviewedAt:optionalText, reviewedBy:optionalText }).optional(),
   owner:z.string().trim().min(1).max(120), archived:z.boolean().optional(),
 }).strict();
 
@@ -48,6 +53,7 @@ export const opportunityInputSchema = z.object({
   id:recordId.optional(), version:z.number().int().positive().optional(), companyId:recordId, leadId:recordId.optional(), primaryContactId:recordId.optional(),
   name:z.string().trim().min(1).max(200), stage:z.enum(leadStatuses), value:z.number().finite().nonnegative(), probability:z.number().int().min(0).max(100),
   closeDate:optionalText, owner:z.string().trim().min(1).max(120), priority:z.enum(['Low','Medium','High']), outcome:optionalText, archived:z.boolean().optional(),
+  fromFinder: z.boolean().optional(),
 }).strict();
 
 export const taskInputSchema = z.object({
@@ -101,21 +107,25 @@ export const activityInputSchema = z.object({
   deletedAt: optionalText,
 }).strict();
 
-export const memberInputSchema = z.object({
-  email: z.email().max(254),
-  name: z.string().trim().min(1).max(120),
-  role: z.enum(workspaceRoles),
-}).strict();
-
-export const finderRequirements = ['Phone', 'Website', 'Email', 'Social'] as const;
+export const finderRequirements = ['Phone', 'Website', 'Email', 'Facebook', 'Social'] as const;
 
 export const finderSearchSchema = z.object({
+  area: finderAreaSchema.optional(),
+  bounds: finderBoundsSchema.optional(),
   action: z.enum(['run', 'save']),
   searchId: recordId.optional(),
   industry: z.string().trim().min(2).max(120).optional(),
+  industryType: z.string().trim().max(120).optional(),
+  industryPsicCode: z.string().trim().max(30).optional(),
   location: z.string().trim().min(2).max(160).optional(),
+  locationCode: z.string().trim().max(30).optional(),
+  locationType: z.string().trim().max(50).optional(),
+  locationProvince: z.string().trim().max(160).optional(),
+  locationRegion: z.string().trim().max(160).optional(),
   targetCount: z.number().int().min(1).max(60).optional(),
   requirements: z.array(z.enum(finderRequirements)).min(1).max(finderRequirements.length).optional(),
+  salesFocus: z.enum(salesFocuses).default('Website & booking'),
+  requirementMode: z.enum(['all', 'any']).default('all'),
 }).strict().superRefine((value, context) => {
   if (value.searchId) return;
   if (!value.industry) context.addIssue({ code: 'custom', path: ['industry'], message: 'Industry is required.' });
@@ -134,6 +144,8 @@ export const finderImportSchema = z.object({
   priority: z.enum(['Low', 'Medium', 'High']),
   status: z.enum(['New', 'Contacted', 'Interested']),
   followUpDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  channel: z.enum(['Recommended', 'Facebook', 'Phone', 'Email', 'Research']).default('Recommended'),
+  allowPossibleDuplicates: z.boolean().default(false),
 }).strict().superRefine((value, context) => {
   if (value.assignmentMode === 'single' && !value.ownerId) context.addIssue({ code: 'custom', path: ['ownerId'], message: 'Select an owner.' });
   if (value.assignmentMode === 'round_robin' && !value.assigneeIds?.length) context.addIssue({ code: 'custom', path: ['assigneeIds'], message: 'Select at least one assignee.' });
@@ -146,6 +158,35 @@ export const finderAiRetrySchema = z.object({
   resultId: recordId,
 }).strict();
 
+export const finderFacebookSchema = z.object({
+  action: z.literal('facebook'),
+  searchId: recordId,
+  resultId: recordId,
+  facebookUrl: z.union([z.literal(''), z.url().max(2000)]),
+  status: z.enum(['confirmed', 'possible', 'not_found']),
+  research: facebookResearchSchema.optional(),
+  reviewVersion: z.number().int().nonnegative().optional(),
+}).strict().superRefine((value, context) => {
+  if (value.status !== 'not_found' && !normalizeFacebookPageUrl(value.facebookUrl)) {
+    context.addIssue({ code: 'custom', path: ['facebookUrl'], message: 'Enter a valid Facebook page URL.' });
+  }
+  if (value.status === 'confirmed' && (!value.research?.identityChecks.includes('name') || value.research.identityChecks.length < 2 || !value.research.pageName)) context.addIssue({ code: 'custom', path: ['research'], message: 'Match the page name and at least one location or contact detail before confirming.' });
+});
+
+export const finderManualProspectSchema = z.object({
+  action: z.literal('add-prospect'), searchId: recordId, name: z.string().trim().min(2).max(160),
+  city: z.string().trim().min(2).max(160), address: z.string().trim().max(300),
+  facebookUrl: z.string().max(2000).refine(value => !!normalizeFacebookPageUrl(value), 'Enter a business Facebook page URL.'),
+  phone: z.string().trim().max(80), email: z.union([z.literal(''), z.email().max(254)]),
+  website: z.union([z.literal(''), z.url().max(2000)]).refine(value => !normalizeFacebookPageUrl(value), 'Put the Facebook page in the Facebook field; add a separate business website here.'),
+  locationConfirmed: z.literal(true, { error: 'Check that this business is in your selected search area.' }),
+}).strict();
+
+const fieldLabels: Record<string, string> = { name: 'Name', industry: 'Industry', city: 'City', email: 'Email', phone: 'Phone', owner: 'Owner', title: 'Title', value: 'Value', probability: 'Probability', lead: 'Lead', companyId: 'Company', stage: 'Stage' };
+
 export function validationError(error: z.ZodError) {
-  return Response.json({ error: 'Validation failed.', fields: z.flattenError(error).fieldErrors }, { status: 422 });
+  const fields = z.flattenError(error).fieldErrors as Record<string, string[] | undefined>;
+  const field = Object.keys(fields)[0];
+  const message = field ? `${fieldLabels[field] || field} is missing or not valid.` : 'Check the details and try again.';
+  return Response.json({ error: message, fields }, { status: 422 });
 }

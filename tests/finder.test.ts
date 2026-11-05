@@ -12,14 +12,15 @@ describe('Finder qualification', () => {
       rating: 4.6,
       userRatingCount: 40,
     });
-    expect(result.opportunity).toBe('Website launch');
-    expect(result.score).toBeGreaterThanOrEqual(90);
-    expect(result.scoreReason).toContain('no website found');
+    expect(result.opportunity).toBe('Verify website presence');
+    expect(result.score).toBeGreaterThanOrEqual(70);
+    expect(result.scoreReason).toContain('website presence needs verification');
   });
 
-  it('qualifies a business when any selected contact field is available', () => {
+  it('requires all selected fields by default and supports any explicitly', () => {
     const phoneOnly = { phone: '+63 917 000 0000', website: '', email: '', socialUrl: '' };
-    expect(matchesRequirements(phoneOnly, ['Phone', 'Email'])).toBe(true);
+    expect(matchesRequirements(phoneOnly, ['Phone', 'Email'])).toBe(false);
+    expect(matchesRequirements(phoneOnly, ['Phone', 'Email'], 'any')).toBe(true);
     expect(matchesRequirements(phoneOnly, ['Email', 'Social'])).toBe(false);
   });
 });
@@ -52,7 +53,7 @@ describe('Gemini Finder intelligence', () => {
     const evidenced = calibrateAssessment({ ...aiInput, email: 'hello@example.com', socialUrl: 'https://facebook.com/example', reviewCount: 500 }, validAssessment);
     expect(sparse.fitScore).toBeLessThan(evidenced.fitScore);
     expect(sparse.confidence).toBe('medium');
-    expect(sparse.concerns).toContain('No business website was found.');
+    expect(sparse.concerns).toContain('Website presence has not been independently verified.');
   });
 
   it('parses structured Gemini output and records tokens', async () => {
