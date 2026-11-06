@@ -1903,3 +1903,6 @@ button,input,select,textarea { font-family:inherit; }
 .profile-identity-row { margin-bottom:10px; padding:20px 24px; border:0; border-radius:22px; background:var(--bento-tile); }
 @media(max-width:900px){ .bento-shell .topbar { grid-template-columns:1fr auto; } }
 @media(max-width:700px){ .profile-identity-row { padding:16px; } }
+::view-transition-old(root),::view-transition-new(root) { animation:none; mix-blend-mode:normal; }
+::view-transition-old(root) { z-index:1; }
+::view-transition-new(root) { z-index:2; }

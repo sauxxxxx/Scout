@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { accentColors, accentHex, customizationSchema, defaultCustomization, defaultTaskTypes, parseCustomization, publicBranding, statusLabelOf } from '@/lib/customization';
+import { inkKeyframes } from '@/lib/ink-spread';
 import { sendInvitationEmail } from '@/lib/invitation-email';
 import { parseWorkspaceSettings, workspaceSettingsSchema } from '@/lib/team';
 import { defaultViewSettings, moved, normalizeViewSettings, parseViewSettings, viewSettingsSchema } from '@/lib/view-settings';
@@ -177,5 +178,33 @@ describe('bento colours', () => {
   it('keeps the dark tile readable', () => {
     expect(contrast(token('--bento-dark', light), '#c7ced6')).toBeGreaterThanOrEqual(4.5);
     expect(contrast(token('--bento-dark', dark), token('--bento-on-dark-muted', dark))).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe('ink spread', () => {
+  const steady = () => 0.5;
+  const numbers = (shape: string) => [...shape.matchAll(/(-?[\d.]+)px (-?[\d.]+)px/g)].map(match => [Number(match[1]), Number(match[2])]);
+
+  it('keeps the same number of points, so the browser can animate between shapes', () => {
+    const sizes = inkKeyframes(100, 40, 1440, 900, steady).map(frame => numbers(frame.clipPath).length);
+    expect(new Set(sizes).size).toBe(1);
+    expect(sizes[0]).toBeGreaterThan(30);
+  });
+
+  it('starts as a point at the button', () => {
+    expect(new Set(numbers(inkKeyframes(100, 40, 1440, 900, steady)[0].clipPath).map(point => point.join()))).toEqual(new Set(['100,40']));
+  });
+
+  it('ends past every corner of the screen, wherever it starts', () => {
+    for (const [x, y] of [[0, 0], [1440, 900], [1300, 30], [700, 450]]) {
+      const end = numbers(inkKeyframes(x, y, 1440, 900).at(-1)!.clipPath);
+      const nearest = Math.min(...end.map(([px, py]) => Math.hypot(px - x, py - y)));
+      expect(nearest).toBeGreaterThan(Math.hypot(Math.max(x, 1440 - x), Math.max(y, 900 - y)));
+    }
+  });
+
+  it('spreads unevenly on the way', () => {
+    const middle = numbers(inkKeyframes(500, 500, 1440, 900).at(1)!.clipPath).map(([px, py]) => Math.hypot(px - 500, py - 500));
+    expect(Math.max(...middle) - Math.min(...middle)).toBeGreaterThan(10);
   });
 });
