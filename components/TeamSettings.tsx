@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { Avatar } from '@/components/crm/shared';
 import { FiMoreHorizontal, FiPlus, FiSearch, FiX } from 'react-icons/fi';
 import { ScoutSelect } from '@/components/ScoutSelect';
 import { useWorkspaceMembers, type WorkspaceMember, type WorkspaceRole } from '@/components/WorkspaceMembers';
@@ -14,7 +15,6 @@ type Impact = { leads: number; tasks: number; opportunities: number; total: numb
 type RoleChoice = { value: string; label: string; description: string; role: WorkspaceRole; customRoleId: string | null };
 
 const title = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
-const initialsOf = (name: string) => name.trim().split(/\s+/).map(part => part[0] || '').join('').slice(0, 2).toUpperCase();
 const dbDate = (value?: string) => (value ? new Date(`${value.replace(' ', 'T')}${value.endsWith('Z') ? '' : 'Z'}`) : null);
 
 function lastActive(value?: string) {
@@ -279,7 +279,7 @@ export function TeamSettings({ session, notify }: Props) {
       <div className="team-head">{tab === 'Active' ? <><span>Person</span><span>Role</span><span>Last active</span><span /></> : <><span>Person</span><span>Role</span><span>Status</span><span /></>}</div>
       {loading && <p className="workflow-empty">Loading team…</p>}
       {!loading && visible.map(member => <div className="team-row" key={member.id}>
-        <div className="team-user"><span className="avatar">{member.avatarUrl ? <img src={member.avatarUrl} alt="" /> : initialsOf(member.name)}</span><div><strong>{tab === 'Pending' ? member.email : member.name}</strong><small>{tab === 'Pending' ? member.name : member.email}</small></div></div>
+        <div className="team-user"><Avatar name={member.name} url={member.avatarUrl} className="team-avatar" /><div><strong>{tab === 'Pending' ? member.email : member.name}</strong><small>{tab === 'Pending' ? member.name : member.email}</small></div></div>
         <div>{editable(member) ? <ScoutSelect ariaLabel={`Role for ${member.name}`} value={memberRoleValue(member)} options={choices.map(choice => ({ value: choice.value, label: choice.label }))} onChange={value => chooseRole(member, value)} /> : <span className="role-label">{memberRoleLabel(member)}</span>}</div>
         {tab === 'Active' ? <span>{member.id === session.user.id ? 'You' : member.status === 'disabled' ? 'Suspended' : lastActive(member.lastSeenAt)}</span> : <span>{member.delivery ? deliveryLabel[member.delivery] : ''}<small>{expiresIn(member.expiresAt)}</small></span>}
         <div className="team-row-actions">

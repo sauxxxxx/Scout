@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { accentColors, accentHex, customizationSchema, defaultCustomization, defaultTaskTypes, parseCustomization, publicBranding, statusLabelOf } from '@/lib/customization';
 import { inkKeyframes } from '@/lib/ink-spread';
 import { sendInvitationEmail } from '@/lib/invitation-email';
+import { peopleLooks, PERSON_TONES, toneFromName } from '@/lib/person-tone';
 import { parseWorkspaceSettings, workspaceSettingsSchema } from '@/lib/team';
 import { defaultViewSettings, moved, normalizeViewSettings, parseViewSettings, viewSettingsSchema } from '@/lib/view-settings';
 
@@ -206,5 +207,50 @@ describe('ink spread', () => {
   it('spreads unevenly on the way', () => {
     const middle = numbers(inkKeyframes(500, 500, 1440, 900).at(1)!.clipPath).map(([px, py]) => Math.hypot(px - 500, py - 500));
     expect(Math.max(...middle) - Math.min(...middle)).toBeGreaterThan(10);
+  });
+});
+
+describe('person colours', () => {
+  const pairs = (prefix: string) => Array.from({ length: PERSON_TONES }, (_, index) => {
+    const rule = css.slice(css.indexOf(`${prefix}.person-tone-${index + 1} {`)).split('}')[0];
+    return [rule.match(/--person-bg:(#[0-9a-f]+)/)?.[1] as string, rule.match(/--person-ink:(#[0-9a-f]+)/)?.[1] as string];
+  });
+  const team = Array.from({ length: 10 }, (_, index) => ({ id: `user-${index}`, name: `Person ${index}`, joinedAt: `2026-01-${String(index + 10)}` }));
+
+  it('keeps initials readable on every colour, in light and dark mode', () => {
+    for (const [background, text] of [...pairs(''), ...pairs('[data-theme=dark] ')]) expect(contrast(background, text)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('uses no green or red', () => {
+    for (const [background] of pairs('')) {
+      const [red, green, blue] = [1, 3, 5].map(start => parseInt(background.slice(start, start + 2), 16));
+      expect(green > red + 8 && green > blue + 8).toBe(false);
+      expect(red > green + 40 && red > blue + 40).toBe(false);
+    }
+  });
+
+  it('gives the first eight people their own colour, in the order they joined', () => {
+    const looks = peopleLooks([...team].reverse());
+    expect(new Set(team.slice(0, 8).map(person => looks.get(person.name)?.tone)).size).toBe(8);
+    expect(looks.get('Person 0')?.tone).toBe(1);
+    expect(looks.get('Person 8')?.tone).toBe(1);
+  });
+
+  it('keeps a colour when someone later joins', () => {
+    const before = peopleLooks(team.slice(0, 3));
+    const after = peopleLooks([...team.slice(0, 3), { id: 'new', name: 'New', joinedAt: '2026-06-01' }]);
+    for (const person of team.slice(0, 3)) expect(after.get(person.name)?.tone).toBe(before.get(person.name)?.tone);
+  });
+
+  it('skips pending invitations and carries photos', () => {
+    const looks = peopleLooks([{ id: 'a', name: 'Ana', avatarUrl: '/photo', joinedAt: '2026-01-01' }, { id: 'b', name: 'Invited', pending: true }]);
+    expect(looks.get('Ana')).toEqual({ tone: 1, avatarUrl: '/photo' });
+    expect(looks.has('Invited')).toBe(false);
+  });
+
+  it('gives a former teammate a steady colour', () => {
+    expect(toneFromName('Gone Person')).toBe(toneFromName('Gone Person'));
+    expect(toneFromName('Gone Person')).toBeGreaterThanOrEqual(1);
+    expect(toneFromName('Gone Person')).toBeLessThanOrEqual(PERSON_TONES);
   });
 });

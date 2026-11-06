@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { usePersonLook } from '@/components/crm/shared';
 import { FiCheck, FiMonitor, FiUpload } from 'react-icons/fi';
 import { applyDensity, applyFontSize, dateFormats, densities, fontSizes, landingPages, notificationDefaults, pipelineViews, profileDefaults, timeFormats, timezones, type ProfileUpdate } from '@/lib/profile';
 import { useWorkspaceMembers } from './WorkspaceMembers';
@@ -30,7 +31,8 @@ function Choice<T extends string | number>({ value, options, onChange, label }: 
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (value: boolean) => void; label: string }) { return <button type="button" className={`profile-switch ${checked ? 'on' : ''}`} role="switch" aria-checked={checked} aria-label={label} onClick={() => onChange(!checked)}><span /></button>; }
 function Avatar({ url, name }: { url: string; name: string }) {
   const [failedUrl, setFailedUrl] = useState('');
-  return <span className="profile-avatar">{url && failedUrl !== url ? <img src={url} alt="Your profile photo" onError={() => setFailedUrl(url)} /> : initials(name)}</span>;
+  const { tone } = usePersonLook(name);
+  return <span className={`profile-avatar person-tone-${tone}`}>{url && failedUrl !== url ? <img src={url} alt="Your profile photo" onError={() => setFailedUrl(url)} /> : initials(name)}</span>;
 }
 
 export function ProfileWorkspace({ theme, view, onViewChange, notify, onProfileSaved, onDraftChange }: { theme: ProfileUpdate['preferences']['theme']; view: string; onViewChange: (view: string) => void; notify: (message: string) => void; onProfileSaved: (profile: ProfileData) => void; onDraftChange: (dirty: boolean, discard: () => void, busy?: boolean) => void }) {

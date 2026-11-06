@@ -1333,10 +1333,7 @@ input[type=checkbox],input[type=radio] { accent-color:var(--accent); }
 .filter-owner .select-label,.filter-row .select-label { display:block; margin-bottom:5px; color:var(--muted); font-size:var(--text-xs); }
 
 /* People, companies and statuses */
-.tone-info { background:var(--info-soft); color:var(--info); }
-.tone-violet { background:var(--violet-soft); color:var(--violet); }
 .tone-neutral { background:var(--surface-2); color:var(--ink-2); }
-.tone-warning { background:var(--warning-soft); color:var(--warning); }
 .person-avatar,.owner i.person-avatar,.pipeline-card-compact>span i.person-avatar { width:calc(26px*var(--font-scale)); height:calc(26px*var(--font-scale)); flex:0 0 auto; display:grid; place-items:center; overflow:hidden; border-radius:50%; font-size:var(--text-xs); font-style:normal; font-weight:600; line-height:1; }
 .person-avatar img { width:100%; height:100%; object-fit:cover; }
 .company-tile { width:calc(34px*var(--font-scale)); height:calc(34px*var(--font-scale)); flex:0 0 auto; display:grid; place-items:center; border-radius:var(--radius-md); font-size:var(--text-sm); font-style:normal; font-weight:600; line-height:1; }
@@ -1906,3 +1903,23 @@ button,input,select,textarea { font-family:inherit; }
 ::view-transition-old(root),::view-transition-new(root) { animation:none; mix-blend-mode:normal; }
 ::view-transition-old(root) { z-index:1; }
 ::view-transition-new(root) { z-index:2; }
+
+/* One soft colour per person. Green and red are left out because they mean Won and Lost. */
+.person-tone-1 { --person-bg:#dbeefb; --person-ink:#0f5a85; }
+.person-tone-2 { --person-bg:#e2e5fb; --person-ink:#3640a8; }
+.person-tone-3 { --person-bg:#ece4fb; --person-ink:#5b35ad; }
+.person-tone-4 { --person-bg:#f8e1f1; --person-ink:#8f2a78; }
+.person-tone-5 { --person-bg:#fbeccb; --person-ink:#7a5200; }
+.person-tone-6 { --person-bg:#fde3d0; --person-ink:#97430f; }
+.person-tone-7 { --person-bg:#e3e7ec; --person-ink:#3e4a56; }
+.person-tone-8 { --person-bg:#eee6dc; --person-ink:#6a4f34; }
+[data-theme=dark] .person-tone-1 { --person-bg:#16344a; --person-ink:#a9dcfb; }
+[data-theme=dark] .person-tone-2 { --person-bg:#252a5c; --person-ink:#c2c8fb; }
+[data-theme=dark] .person-tone-3 { --person-bg:#33265a; --person-ink:#d4c3fb; }
+[data-theme=dark] .person-tone-4 { --person-bg:#4a1f44; --person-ink:#f6bde6; }
+[data-theme=dark] .person-tone-5 { --person-bg:#43320f; --person-ink:#f6d68c; }
+[data-theme=dark] .person-tone-6 { --person-bg:#4b2a14; --person-ink:#f9c39b; }
+[data-theme=dark] .person-tone-7 { --person-bg:#2b3339; --person-ink:#c9d3dc; }
+[data-theme=dark] .person-tone-8 { --person-bg:#3a2e22; --person-ink:#dfcbb4; }
+.person-avatar[class*=person-tone-],.bento-shell .avatar[class*=person-tone-],.profile-avatar[class*=person-tone-] { background:var(--person-bg); color:var(--person-ink); }
+.team-avatar { width:calc(30px*var(--font-scale)); height:calc(30px*var(--font-scale)); }

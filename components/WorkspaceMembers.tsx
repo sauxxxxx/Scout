@@ -2,16 +2,18 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { CapabilitySet } from '@/lib/permissions';
+import { peopleLooks, type PersonLook } from '@/lib/person-tone';
 
 export type WorkspaceRole = 'owner' | 'admin' | 'member' | 'viewer';
 export type WorkspaceMember = {
-  id: string; email: string; name: string; avatarUrl?: string; role: WorkspaceRole; status: string; pending: boolean;
+  id: string; email: string; name: string; avatarUrl?: string; joinedAt?: string; role: WorkspaceRole; status: string; pending: boolean;
   invitationId?: string; expiresAt?: string; lastSeenAt?: string; customRoleId?: string; customRoleName?: string;
   delivery?: 'sent' | 'manual' | 'failed'; lastSentAt?: string; note?: string; inviteUrl?: string;
 };
 type Session = { user: { id: string; email: string; name: string; avatarUrl?: string }; role: WorkspaceRole; capabilities?: CapabilitySet; canInvite?: boolean };
 type MembersContext = {
   members: WorkspaceMember[];
+  people: Map<string, PersonLook>;
   assignableMembers: WorkspaceMember[];
   currentMember?: WorkspaceMember;
   defaultOwner?: WorkspaceMember;
@@ -24,7 +26,7 @@ type MembersContext = {
 };
 
 const allCapabilities: CapabilitySet = { 'finder:run': true, 'records:delete': true, 'records:export': true, 'records:view_all': true };
-const fallbackContext: MembersContext = { members: [], assignableMembers: [], currentRole: 'viewer', capabilities: allCapabilities, canInvite: false, loading: false, refresh: async () => {}, replaceMembers: () => {} };
+const fallbackContext: MembersContext = { members: [], people: new Map(), assignableMembers: [], currentRole: 'viewer', capabilities: allCapabilities, canInvite: false, loading: false, refresh: async () => {}, replaceMembers: () => {} };
 const Context = createContext<MembersContext>(fallbackContext);
 
 export function WorkspaceMembersProvider({ session, children, preferredOwner = 'Me', initialMembers }: { session: Session; children: React.ReactNode; preferredOwner?: string; initialMembers?: WorkspaceMember[] }) {
@@ -40,10 +42,11 @@ export function WorkspaceMembersProvider({ session, children, preferredOwner = '
   }, []);
   const hasStartingMembers = !!initialMembers?.length;
   useEffect(() => { if (!hasStartingMembers) void refresh(); }, [refresh, hasStartingMembers]);
+  const people = useMemo(() => peopleLooks(members), [members]);
   const assignableMembers = useMemo(() => members.filter(member => !member.pending && member.status !== 'disabled' && member.role !== 'viewer'), [members]);
   const currentMember = members.find(member => member.id === session.user.id) || fallback;
   const defaultOwner = ['owner', 'admin'].includes(session.role) ? assignableMembers.find(member => member.id === preferredOwner) || currentMember : currentMember;
-  return <Context.Provider value={{ members, assignableMembers, currentMember, defaultOwner, currentRole: session.role, capabilities: session.capabilities || allCapabilities, canInvite: Boolean(session.canInvite), loading, refresh, replaceMembers: setMembers }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ members, people, assignableMembers, currentMember, defaultOwner, currentRole: session.role, capabilities: session.capabilities || allCapabilities, canInvite: Boolean(session.canInvite), loading, refresh, replaceMembers: setMembers }}>{children}</Context.Provider>;
 }
 
 export function useWorkspaceMembers() {

@@ -8,6 +8,7 @@ import { defaultViewSettings, type ViewSettings } from '@/lib/view-settings';
 import { localIso } from '@/lib/task-dates';
 import { useWorkspaceMembers } from '@/components/WorkspaceMembers';
 import { gmailComposeUrl } from '@/lib/gmail';
+import { toneFromName } from '@/lib/person-tone';
 import type { Page, TaskItem, FloatingMenuPosition } from '@/lib/crm-types';
 
 export const routePages:Page[]=['Overview','Leads','Finder','Pipeline','Tasks','Activities','Reports','Profile','Settings'];
@@ -126,16 +127,17 @@ export function PriorityBadge({priority,compact=false}:{priority:string;compact?
   return <span className={`priority-badge ${priority.toLowerCase()}${compact?' compact':''}`} title={compact?`${priority} priority`:undefined}><FiFlag aria-hidden="true"/>{compact?<span className="sr-only">{priority} priority</span>:priority}</span>;
 }
 
-const tones=['info','violet','warning','neutral'];
-/** The same name always gets the same colour, so people and companies are recognisable at a glance. */
-export function toneOf(name:string){let total=0;for(const letter of name)total+=letter.charCodeAt(0);return tones[total%tones.length]}
+/** One person, one colour, everywhere in Scout. A photo shows instead when they've added one. */
+export function usePersonLook(name:string){const {people}=useWorkspaceMembers();return people.get(name)||{tone:toneFromName(name)}}
 
-export function Avatar({name,url,className=''}:{name:string;url?:string;className?:string}){
-  return <i className={`person-avatar tone-${toneOf(name)} ${className}`} aria-hidden="true">{url?<img src={url} alt=""/>:initialsOf(name)||'?'}</i>;
+/** Contacts are customers, not teammates, so they stay neutral and never look like an owner. */
+export function Avatar({name,url,className='',neutral=false}:{name:string;url?:string;className?:string;neutral?:boolean}){
+  const look=usePersonLook(name);const photo=url||(neutral?undefined:look.avatarUrl);
+  return <i className={`person-avatar ${neutral?'tone-neutral':`person-tone-${look.tone}`} ${className}`} aria-hidden="true">{photo?<img src={photo} alt=""/>:initialsOf(name)||'?'}</i>;
 }
 
 export function CompanyTile({name}:{name:string}){
-  return <i className={`company-tile tone-${toneOf(name)}`} aria-hidden="true">{initialsOf(name)||'?'}</i>;
+  return <i className="company-tile tone-neutral" aria-hidden="true">{initialsOf(name)||'?'}</i>;
 }
 
 export function EmptyState({title,children,action}:{title:string;children?:React.ReactNode;action?:React.ReactNode}){
