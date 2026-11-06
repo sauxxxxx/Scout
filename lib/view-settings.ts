@@ -25,6 +25,7 @@ export const viewSettingsSchema = z.object({
   overviewSections: z.array(z.object({ key: z.enum(overviewSectionKeys), visible: z.boolean() }).strict()).max(overviewSectionKeys.length),
   savedFilters: z.array(savedFilterSchema).max(20),
   tablePageSize: z.union([z.literal(25), z.literal(50), z.literal(100)]),
+  backgroundUrl: z.string().max(300).refine(value => !value || /^\/api\/profile\/background\?key=backgrounds%2F[A-Za-z0-9._~-]+(?:%[0-9A-Fa-f]{2}[A-Za-z0-9._~-]*)*%2F[a-f0-9-]+\.jpg$/.test(value), 'Upload the image again.'),
 });
 export type ViewSettings = z.infer<typeof viewSettingsSchema>;
 
@@ -33,6 +34,7 @@ export const defaultViewSettings: ViewSettings = {
   overviewSections: overviewSectionKeys.map(key => ({ key, visible: true })),
   savedFilters: [],
   tablePageSize: 25,
+  backgroundUrl: '',
 };
 
 /** Anything added to Scout later joins the end of a saved list, so older settings keep working. */

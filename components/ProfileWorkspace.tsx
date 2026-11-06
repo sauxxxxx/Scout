@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { BackgroundPicker } from '@/components/BackgroundPicker';
 import { usePersonLook } from '@/components/crm/shared';
 import { FiCheck, FiMonitor, FiUpload } from 'react-icons/fi';
 import { applyDensity, applyFontSize, dateFormats, densities, fontSizes, landingPages, notificationDefaults, pipelineViews, profileDefaults, timeFormats, timezones, type ProfileUpdate } from '@/lib/profile';
@@ -130,6 +131,7 @@ export function ProfileWorkspace({ theme, view, onViewChange, notify, onProfileS
         <div className="profile-setting-row"><div><strong>Finder radius</strong><span>Starting area for a new search, in km.</span></div><Choice label="Finder radius" value={profile.preferences.finderRadius} options={[3, 5, 10, 15, 25, 50]} onChange={value => updatePreference('finderRadius', value)} /></div>
         <div className="profile-setting-row"><div><strong>Finder lead count</strong><span>Target count for a new search.</span></div><input className="profile-number" type="number" inputMode="numeric" min={1} max={300} aria-label="Finder lead count" value={profile.preferences.finderLeadCount} onChange={event => updatePreference('finderLeadCount', Math.min(300, Math.max(1, Number(event.target.value) || 1)))} /></div>
       </section>
+      <section className="profile-section"><h2>Background image</h2><BackgroundPicker /></section>
       <section className="profile-section"><h2>Opportunity cards</h2><div className="profile-card-properties">{([['value', 'Deal value'], ['owner', 'Owner'], ['closeDate', 'Close date'], ['probability', 'Probability'], ['priority', 'Priority'], ['nextAction', 'Next action']] as const).map(([key, label]) => <button type="button" aria-pressed={profile.preferences.cardProperties[key]} onClick={() => updatePreference('cardProperties', { ...profile.preferences.cardProperties, [key]: !profile.preferences.cardProperties[key] })} key={key}><span>{profile.preferences.cardProperties[key] && <FiCheck />}</span>{label}</button>)}</div></section>
       <section className="profile-section"><h2>Dates and times</h2><div className="profile-setting-row"><div><strong>Timezone</strong><span>Used for dates across Scout, and for working out what counts as today.</span></div><ScoutSelect ariaLabel="Account timezone" value={profile.timezone} options={timezones.map(value => ({ value, label: value.replace('Asia/', '') }))} onChange={timezone => setProfile(current => ({ ...current, timezone: timezone as ProfileData['timezone'] }))} /></div><div className="profile-setting-row"><strong>Date format</strong><Choice label="Date format" value={profile.dateFormat} options={dateFormats} onChange={dateFormat => setProfile(current => ({ ...current, dateFormat }))} /></div><div className="profile-setting-row"><strong>Time format</strong><Choice label="Time format" value={profile.timeFormat} options={timeFormats} onChange={timeFormat => setProfile(current => ({ ...current, timeFormat }))} /></div><div className="profile-format-preview">Preview <time>{accountDate('2026-10-05T08:30:00Z', profile)}</time></div></section>
     </>}

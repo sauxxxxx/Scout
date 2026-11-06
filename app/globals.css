@@ -1941,3 +1941,18 @@ button,input,select,textarea { font-family:inherit; }
 .table-pager.compact .table-pager-size,.table-pager.compact .table-pager-pages button:not([aria-label$=' page']),.table-pager.compact .table-pager-gap { display:none; }
 .table-pager.compact .table-pager-pages { width:100%; justify-content:space-between; background:var(--surface); }
 .table-pager.compact .table-pager-pages small { display:block; color:var(--muted); font-size:var(--text-xs); }
+
+/* A personal background image. The veil is what keeps text readable on any photo, and a test checks it against pure black and white. */
+:root { --background-veil:#e9ecefb8; --background-muted:#30363b; }
+[data-theme=dark] { --background-veil:#0e1114b8; --background-muted:#d3d7da; }
+.app-shell.has-background { position:relative; isolation:isolate; --muted:var(--background-muted); }
+.app-background { position:fixed; z-index:-1; inset:0; background-position:center; background-size:cover; }
+.app-background:after { content:''; position:absolute; inset:0; background:var(--background-veil); }
+.has-background .topbar,.has-background .context-sidebar,.has-background .content { background:transparent; }
+.background-picker { display:flex; flex-wrap:wrap; align-items:center; gap:16px; }
+.background-picker>div { flex:1 1 260px; min-width:0; }
+.background-picker p { max-width:520px; margin:0; color:var(--muted); font-size:var(--text-sm); line-height:1.5; }
+.background-preview { width:160px; height:96px; flex:0 0 auto; display:grid; place-items:center; border-radius:14px; background-color:var(--surface); background-position:center; background-size:cover; color:var(--muted); font-size:var(--text-xl); }
+.background-actions { display:flex; flex-wrap:wrap; align-items:center; gap:14px; margin-top:10px; }
+.background-actions .secondary { background:var(--surface); }
+.background-actions .text-link { align-self:center; }

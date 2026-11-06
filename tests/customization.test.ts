@@ -302,3 +302,34 @@ describe('table pages', () => {
     expect(viewSettingsSchema.safeParse({ ...defaultViewSettings, tablePageSize: 7 }).success).toBe(false);
   });
 });
+
+describe('background image', () => {
+  const tint = (name: RegExp) => css.match(name)?.[1] as string;
+  const lightVeil = tint(/:root \{ --background-veil:(#[0-9a-f]{8})/);
+  const darkVeil = tint(/\[data-theme=dark\] \{ --background-veil:(#[0-9a-f]{8})/);
+  const lightMuted = tint(/--background-veil:#e9ecefb8; --background-muted:(#[0-9a-f]{6})/);
+  const darkMuted = tint(/--background-veil:#0e1114b8; --background-muted:(#[0-9a-f]{6})/);
+  const over = (veil: string, photo: number) => {
+    const opacity = parseInt(veil.slice(7, 9), 16) / 255;
+    const mixed = [1, 3, 5].map(start => Math.round(parseInt(veil.slice(start, start + 2), 16) * opacity + photo * (1 - opacity)));
+    return `#${mixed.map(value => value.toString(16).padStart(2, '0')).join('')}`;
+  };
+
+  it('keeps page text readable on the darkest and brightest photos', () => {
+    for (const photo of [0, 128, 255]) {
+      expect(contrast(over(lightVeil, photo), lightMuted)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(over(darkVeil, photo), darkMuted)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('only accepts images uploaded to Scout', () => {
+    const valid = (backgroundUrl: string) => viewSettingsSchema.safeParse({ ...defaultViewSettings, backgroundUrl }).success;
+    expect(valid('')).toBe(true);
+    expect(valid('/api/profile/background?key=backgrounds%2Fuser%2Fab12-cd34.jpg')).toBe(true);
+    for (const url of ['https://evil.example/a.jpg', 'javascript:alert(1)', '/api/profile/background?key=backgrounds%2Fa%2Fb.svg', 'x") url("https://evil.example/a.jpg', '/api/profile/background?key=backgrounds%2Fa")%2Fb.jpg']) expect(valid(url)).toBe(false);
+  });
+
+  it('starts with no background', () => {
+    expect(parseViewSettings('{"savedFilters":[]}').backgroundUrl).toBe('');
+  });
+});
