@@ -126,7 +126,7 @@ export function PriorityBadge({priority,compact=false}:{priority:string;compact?
   return <span className={`priority-badge ${priority.toLowerCase()}${compact?' compact':''}`} title={compact?`${priority} priority`:undefined}><FiFlag aria-hidden="true"/>{compact?<span className="sr-only">{priority} priority</span>:priority}</span>;
 }
 
-const tones=['info','violet','positive','warning','negative'];
+const tones=['info','violet','warning','neutral'];
 /** The same name always gets the same colour, so people and companies are recognisable at a glance. */
 export function toneOf(name:string){let total=0;for(const letter of name)total+=letter.charCodeAt(0);return tones[total%tones.length]}
 

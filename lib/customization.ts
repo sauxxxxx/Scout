@@ -2,12 +2,12 @@ import { z } from 'zod';
 import { leadStatuses } from '@/lib/validation';
 
 /** Each colour has a light and dark version in globals.css, tested for readable button text. */
-export const accentColors = ['Scout green', 'Ocean blue', 'Royal violet', 'Rose', 'Sunset', 'Graphite'] as const;
+export const accentColors = ['Graphite', 'Ocean blue', 'Royal violet', 'Rose', 'Sunset', 'Scout green'] as const;
 export type AccentColor = (typeof accentColors)[number];
 
 /** The light-mode colour, for places the stylesheet can't reach, like invitation emails and the colour picker. */
 export const accentHex: Record<AccentColor, string> = {
-  'Scout green': '#0b7a5f', 'Ocean blue': '#1f66c1', 'Royal violet': '#6a45c7', Rose: '#c2325f', Sunset: '#b4500f', Graphite: '#2a3439',
+  'Scout green': '#0b7a5f', 'Ocean blue': '#1f66c1', 'Royal violet': '#6a45c7', Rose: '#c2325f', Sunset: '#b4500f', Graphite: '#14181d',
 };
 
 export const defaultTaskTypes = ['Facebook message', 'Call', 'Callback', 'Email', 'Meeting', 'Follow-up', 'Send proposal', 'Review proposal', 'Research', 'Prepare quote', 'Collect documents', 'Internal reminder', 'General task'];
@@ -22,7 +22,7 @@ export type Customization = {
   taskTypes: string[];
 };
 
-export const defaultCustomization: Customization = { accent: 'Scout green', logoUrl: '', welcomeMessage: '', statusLabels: {}, taskTypes: defaultTaskTypes };
+export const defaultCustomization: Customization = { accent: 'Graphite', logoUrl: '', welcomeMessage: '', statusLabels: {}, taskTypes: defaultTaskTypes };
 
 export const logoUrlPattern = /^\/api\/workspace\/logo\?key=logos%2F[^&/]+%2F[a-f0-9-]+\.(png|jpg|webp)$/;
 

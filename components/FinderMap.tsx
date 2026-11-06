@@ -6,6 +6,9 @@ import { MarkerClusterer } from '@googlemaps/markerclusterer';
 import { FiCheck, FiMapPin, FiMaximize2, FiSearch } from 'react-icons/fi';
 import { hasCoordinates, parseFinderArea, type FinderArea } from '@/lib/finder-map';
 
+/** Google draws these itself, so they can't read the stylesheet's colours directly. */
+const accentColor = () => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#14181d';
+
 type MapBusiness = { id: string; name: string; latitude?: number; longitude?: number; importedLeadId?: string };
 export type FinderAreaDetails = { locationLabel?: string; formattedAddress?: string };
 type Props = {
@@ -95,7 +98,7 @@ export function FinderMap({ location, area, radiusKm = 10, results = emptyResult
       });
       map.current = instance;
       circle.current = new google.maps.Circle({
-        map: instance, strokeColor: '#26765d', strokeWeight: 2, fillColor: '#26765d', fillOpacity: 0.1, clickable: false,
+        map: instance, strokeColor: accentColor(), strokeWeight: 2, fillColor: accentColor(), fillOpacity: 0.1, clickable: false,
       });
       const initialArea = currentArea.current;
       if (initialArea && hasCoordinates(initialArea) && Number.isFinite(initialArea.radiusKm)) {
@@ -176,7 +179,7 @@ export function FinderMap({ location, area, radiusKm = 10, results = emptyResult
     if (!ready || !map.current) return;
     const markerStore = markers.current;
     const instances = results.filter(hasCoordinates).map(result => {
-      const pin = new google.maps.marker.PinElement({ background: '#26765d', borderColor: '#fff', glyphColor: '#fff' });
+      const pin = new google.maps.marker.PinElement({ background: accentColor(), borderColor: '#fff', glyphColor: '#fff' });
       const marker = new google.maps.marker.AdvancedMarkerElement({
         position: { lat: result.latitude, lng: result.longitude }, title: result.name, content: pin.element,
       });
@@ -195,7 +198,7 @@ export function FinderMap({ location, area, radiusKm = 10, results = emptyResult
       if (!marker) continue;
       const active = focusedId === result.id;
       marker.content = new google.maps.marker.PinElement({
-        background: active ? '#172b35' : selected.includes(result.id) ? '#1766ba' : result.importedLeadId ? '#718078' : '#26765d',
+        background: active ? '#172b35' : selected.includes(result.id) ? '#1766ba' : result.importedLeadId ? '#718078' : accentColor(),
         borderColor: '#fff', glyphColor: '#fff', scale: active ? 1.25 : 1,
       }).element;
       marker.zIndex = active ? 1000 : 1;

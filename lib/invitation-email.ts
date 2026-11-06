@@ -31,7 +31,7 @@ export async function sendInvitationEmail(config: InvitationEmailConfig, input: 
   const paragraphs = (value: string) => escapeHtml(value).replace(/\n/g, '<br/>');
   const origin = new URL(input.inviteUrl).origin;
   const logo = input.logoUrl ? `${origin}${input.logoUrl}` : `${origin}/scout-logo.png`;
-  const accent = /^#[0-9a-f]{6}$/i.test(input.accentHex || '') ? input.accentHex : '#0b7a5f';
+  const accent = /^#[0-9a-f]{6}$/i.test(input.accentHex || '') ? input.accentHex : '#14181d';
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { authorization: `Bearer ${config.apiKey.trim()}`, 'content-type': 'application/json' },

@@ -39,8 +39,9 @@ describe('accent colours', () => {
     expect(contrast(dark.ink, dark.soft)).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('starts on the Scout colour before any workspace loads', () => {
-    expect(css).toContain(`--accent:${accentHex['Scout green']};`);
+  it('starts on neutral graphite before any workspace loads, with no green', () => {
+    expect(defaultCustomization.accent).toBe('Graphite');
+    expect(css.slice(css.indexOf(':root {'), css.indexOf('--focus-ring'))).toContain(`--accent:${accentHex.Graphite};`);
   });
 });
 
@@ -158,7 +159,7 @@ describe('invitation email branding', () => {
 
 describe('bento colours', () => {
   it('keeps the highlight readable with every accent colour', () => {
-    for (const accent of accentColors.filter(item => item !== 'Scout green')) {
+    for (const accent of accentColors.filter(item => !['Scout green', 'Graphite'].includes(item))) {
       const pop = css.slice(css.indexOf(`html[data-accent='${accent}'] { --bento-pop`)).match(/--bento-pop:(#[0-9a-f]+)/)?.[1] as string;
       expect(contrast(pop, '#14181d')).toBeGreaterThanOrEqual(4.5);
     }

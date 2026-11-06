@@ -86,7 +86,7 @@ export function OpportunityPipeline({opportunities,companies,contacts,leads,task
   const beginCreate=(stage='New')=>{setForm(value=>({...value,stage,probability:String(probabilities[stage]??20)}));setCreating(true)};
 
   const isCollapsed=(stage:string)=>mode==='Board'&&['Won','Lost'].includes(stage)&&!expandedStages.includes(stage);
-  const board=<div ref={boardRef} className={`pipeline-board-modern ${mode==='Detailed'?'detailed':'compact'}`} style={mode==='Board'?{gridTemplateColumns:stages.map(stage=>isCollapsed(stage)?'calc(96px*var(--font-scale))':'minmax(calc(190px*var(--font-scale)),1fr)').join(' ')}:undefined}>{stages.map((stage,index)=>{
+  const board=<div ref={boardRef} className={`pipeline-board-modern ${mode==='Detailed'?'detailed':'compact'}`} style={mode==='Board'?{gridTemplateColumns:stages.map(stage=>isCollapsed(stage)?'calc(96px*var(--font-scale))':'minmax(calc(170px*var(--font-scale)),1fr)').join(' ')}:undefined}>{stages.map((stage,index)=>{
     const stageItems=visible.filter(item=>item.stage===stage);
     const collapsed=isCollapsed(stage);
     return <section className={`pipeline-column pipeline-column-${index} ${collapsed?'is-collapsed':''} ${dragOverStage===stage?'drag-over':''}`} onDragEnter={()=>setDragOverStage(stage)} onDragLeave={event=>{if(!event.currentTarget.contains(event.relatedTarget as Node))setDragOverStage(null)}} onDragOver={event=>{event.preventDefault();event.dataTransfer.dropEffect='move'}} onDrop={event=>{event.preventDefault();const item=opportunities.find(value=>value.id===event.dataTransfer.getData('text/plain'));setDragOverStage(null);if(item)move(item,stage)}} key={stage}>
@@ -94,13 +94,16 @@ export function OpportunityPipeline({opportunities,companies,contacts,leads,task
       {collapsed?<button className="pipeline-expand" aria-label={`Show ${statusLabel(stage)} opportunities`} onClick={()=>setExpandedStages(value=>[...value,stage])}><strong>{money(stageItems.reduce((sum,item)=>sum+item.value,0))}</strong><small>Show</small></button>:<div className="pipeline-column-scroll">{stageItems.map(item=>{
         const lead=leadFor(item);const contact=contactFor(item);const nextTask=nextTaskFor(item);
         return <article className={`${draggedId===item.id?'dragging':''}${justWon===item.id?' just-won':''}`} draggable onDragStart={event=>{event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',item.id);setDraggedId(item.id)}} onDragEnd={()=>{lastDragEnd.current=Date.now();setDraggedId(null);setDragOverStage(null)}} onClick={()=>{if(Date.now()-lastDragEnd.current>250)setSelectedId(item.id)}} key={item.id}>
-          <div className="pipeline-card-head"><strong>{item.name}</strong>{cardProperties.value&&<b>{money(item.value)}</b>}</div>
+          <div className="pipeline-card-head"><strong>{item.name}</strong>{mode==='Detailed'&&cardProperties.value&&<b>{money(item.value)}</b>}</div>
           <p>{companyName(item.companyId)}</p>
           {mode==='Board'&&<div className="pipeline-card-compact">
+            {cardProperties.value?<b className="pipeline-value">{money(item.value)}</b>:<span/>}
             {cardProperties.owner&&<span title={item.owner}><Avatar name={item.owner}/></span>}
-            {cardProperties.closeDate&&<span className="pipeline-close"><FiCalendar/>{item.closeDate?formatDate(item.closeDate):'No date'}</span>}
-            {cardProperties.probability&&<span className="pipeline-probability">{item.probability}%</span>}
-            {cardProperties.priority&&<PriorityBadge priority={item.priority} compact/>}
+            {(cardProperties.closeDate||cardProperties.probability||cardProperties.priority)&&<div className="pipeline-card-meta">
+              {cardProperties.closeDate&&<span className="pipeline-close"><FiCalendar/>{item.closeDate?formatDate(item.closeDate):'No date'}</span>}
+              {cardProperties.probability&&<span className="pipeline-probability">{item.probability}%</span>}
+              {cardProperties.priority&&<PriorityBadge priority={item.priority} compact/>}
+            </div>}
             {cardProperties.nextAction&&<span className="pipeline-next-action">{nextTask?.title||lead?.next?.split(' · ')[0]||'No next action'}</span>}
           </div>}
           {mode==='Detailed'&&<div className="pipeline-card-details">
@@ -116,11 +119,12 @@ export function OpportunityPipeline({opportunities,companies,contacts,leads,task
     </section>
   })}</div>;
 
-  return <><header className="pipeline-page-head"><div><h1>Pipeline</h1></div><button className="primary" onClick={()=>beginCreate()}><FiPlus/> Add opportunity</button></header>
+  return <><header className="pipeline-page-head"><h1>Pipeline</h1>
     <div className="pipeline-view-toolbar">
       <nav><button className={mode==='Board'?'active':''} onClick={()=>setMode('Board')}><FiColumns/>Board</button><button className={mode==='Detailed'?'active':''} onClick={()=>setMode('Detailed')}><FiFileText/>Detailed</button><button className={mode==='Table'?'active':''} onClick={()=>setMode('Table')}><FiList/>Table</button></nav>
       <div className="pipeline-toolbar-actions"><label><FiSearch/><input aria-label="Search pipeline" placeholder="Search" value={query} onChange={event=>setQuery(event.target.value)}/></label><button className={showFilters||owner!=='All owners'||priority!=='All priorities'?'active':''} onClick={()=>setShowFilters(value=>!value)}><FiFilter/>Filter</button><CustomSelect value={sortBy} options={['Sort: Default','Sort: Name','Sort: Value','Sort: Close date']} onChange={setSortBy}/><div className="pipeline-properties"><button className={showProperties?'active':''} onClick={()=>setShowProperties(value=>!value)}><FiSliders/>Properties</button>{showProperties&&<div className="pipeline-properties-menu">{([{key:'value',label:'Value'},{key:'owner',label:'Owner'},{key:'closeDate',label:'Close date'},{key:'probability',label:'Probability'},{key:'priority',label:'Priority'},{key:'nextAction',label:'Next action'}] as const).map(property=><button onClick={()=>setCardProperties(value=>({...value,[property.key]:!value[property.key]}))} key={property.key}><span>{property.label}</span>{cardProperties[property.key]&&<FiCheck/>}</button>)}</div>}</div></div>
     </div>
+    <button className="primary" onClick={()=>beginCreate()}><FiPlus/> Add opportunity</button></header>
     {showFilters&&<div className="pipeline-filter-panel"><CustomSelect value={owner} options={ownerOptions} onChange={setOwner}/><CustomSelect value={priority} options={['All priorities','High','Medium','Low']} onChange={setPriority}/><button onClick={()=>{setOwner('All owners');setPriority('All priorities')}}>Clear filters</button></div>}
     {!opportunities.some(item=>!item.archived)?<EmptyState title="No opportunities yet" action={<button className="primary" onClick={()=>beginCreate()}><FiPlus/> Add opportunity</button>}>Opportunities track the deals you&apos;re working on, from first contact to won.</EmptyState>:mode==='Table'?<div className="pipeline-table-view"><div className="pipeline-table-head"><span>Opportunity</span><span>Stage</span><span>Value</span><span>Probability</span><span>Owner</span><span>Close date</span><span/></div>{visible.map(item=><div className="pipeline-table-row" key={item.id} onClick={()=>setSelectedId(item.id)}><span><strong>{item.name}</strong><small>{companyName(item.companyId)}</small></span><span onClick={event=>event.stopPropagation()}><StatusField value={item.stage} options={stages} onChange={stage=>move(item,stage)}/></span><strong>{money(item.value)}</strong><span>{item.probability}%</span><span>{item.owner}</span><span>{item.closeDate||'Not set'}</span><FiChevronRight/></div>)}</div>:board}
 
