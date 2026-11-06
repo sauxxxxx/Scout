@@ -8,7 +8,7 @@ import { defaultViewSettings, type ViewSettings } from '@/lib/view-settings';
 import { localIso } from '@/lib/task-dates';
 import { useWorkspaceMembers } from '@/components/WorkspaceMembers';
 import { composeWindowFeatures, gmailComposeUrl } from '@/lib/gmail';
-import { pageNumbers, pageSizes, type PageSize } from '@/lib/pagination';
+import { pageNumbers, pageSizes, pageWindow, type PageSize } from '@/lib/pagination';
 import { toneFromName } from '@/lib/person-tone';
 import type { Page, TaskItem, FloatingMenuPosition } from '@/lib/crm-types';
 
@@ -160,8 +160,24 @@ export function ToolMenu({label,icon,children,disabled,active}:{label:string;ico
   return <div className="tool-menu" ref={wrap}><button className={`secondary${active?' active':''}`} disabled={disabled} aria-expanded={open} onClick={()=>setOpen(value=>!value)}>{icon}{label}</button>{open&&<div className="tool-menu-panel">{children(()=>setOpen(false))}</div>}</div>;
 }
 
-export function TablePager({page,last,from,to,total,pageSize,noun,onPage,onPageSize}:{page:number;last:number;from:number;to:number;total:number;pageSize:PageSize;noun:string;onPage:(page:number)=>void;onPageSize:(size:PageSize)=>void}){
-  return <nav className="table-pager" aria-label={`${noun} pages`}>
+/** Pages through rows held on this device, and asks the server for more when a page runs past them. `resetKey` is what returns it to page 1. */
+export function useTablePages<T>(rows:T[],server:{total:number|null;hasMore:boolean;more:()=>void},resetKey:string){
+  const {view,updateView}=useViewSettings();const pageSize=view.tablePageSize;const key=`${resetKey}|${pageSize}`;
+  const [paging,setPaging]=useState({key,page:1});
+  // The server knows the full count, while only the rows loaded so far are on this device.
+  const total=server.hasMore?Math.max(server.total??0,rows.length):rows.length;
+  const range=pageWindow(total,pageSize,paging.key===key?paging.page:1);
+  const pageRows=useMemo(()=>rows.slice(range.start,range.end),[rows,range.start,range.end]);
+  const needsRows=range.end>rows.length&&server.hasMore;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `more` is new on every render, and this should run once each time rows run out.
+  useEffect(()=>{if(needsRows)server.more()},[needsRows,rows.length]);
+  const goTo=(page:number)=>{setPaging({key,page});document.querySelector('.content')?.scrollTo({top:0})};
+  return {pageRows,pager:{...range,total,pageSize,onPage:goTo,onPageSize:(size:PageSize)=>updateView({tablePageSize:size})}};
+}
+
+export function TablePager({page,last,from,to,total,pageSize,noun,compact=false,onPage,onPageSize}:{page:number;last:number;from:number;to:number;total:number;pageSize:PageSize;noun:string;compact?:boolean;onPage:(page:number)=>void;onPageSize:(size:PageSize)=>void}){
+  if(!total)return null;
+  return <nav className={`table-pager${compact?' compact':''}`} aria-label={`${noun} pages`}>
     <span aria-live="polite">{from===to?from:`${from}–${to}`} of {total}</span>
     <div className="table-pager-size"><span>Rows per page</span><CustomSelect value={String(pageSize)} options={pageSizes.map(String)} onChange={value=>onPageSize(Number(value) as PageSize)}/></div>
     <div className="table-pager-pages">

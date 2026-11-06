@@ -1936,3 +1936,8 @@ button,input,select,textarea { font-family:inherit; }
 .table-pager-gap { min-width:22px; text-align:center; }
 .table-pager-pages small { display:none; padding:0 8px; color:var(--ink); font-size:var(--text-sm); white-space:nowrap; }
 @media(max-width:700px){ .table-pager { justify-content:space-between; } .table-pager-size { display:none; } .table-pager-pages button:not([aria-label$=' page']),.table-pager-gap { display:none; } .table-pager-pages small { display:block; } .table-pager-pages button { min-width:44px; height:44px; } }
+.table-pager.compact { justify-content:space-between; margin-top:12px; padding:0; }
+.table-pager.compact>span { display:none; }
+.table-pager.compact .table-pager-size,.table-pager.compact .table-pager-pages button:not([aria-label$=' page']),.table-pager.compact .table-pager-gap { display:none; }
+.table-pager.compact .table-pager-pages { width:100%; justify-content:space-between; background:var(--surface); }
+.table-pager.compact .table-pager-pages small { display:block; color:var(--muted); font-size:var(--text-xs); }

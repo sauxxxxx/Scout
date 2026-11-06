@@ -298,7 +298,7 @@ describe('table pages', () => {
   });
 
   it('defaults to 25 rows, and keeps that for older saved settings', () => {
-    expect(parseViewSettings('{"savedFilters":[]}').leadPageSize).toBe(25);
-    expect(viewSettingsSchema.safeParse({ ...defaultViewSettings, leadPageSize: 7 }).success).toBe(false);
+    expect(parseViewSettings('{"savedFilters":[]}').tablePageSize).toBe(25);
+    expect(viewSettingsSchema.safeParse({ ...defaultViewSettings, tablePageSize: 7 }).success).toBe(false);
   });
 });
