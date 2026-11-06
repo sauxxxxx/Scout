@@ -7,7 +7,7 @@ import { defaultCustomization, statusLabelOf, type Customization } from '@/lib/c
 import { defaultViewSettings, type ViewSettings } from '@/lib/view-settings';
 import { localIso } from '@/lib/task-dates';
 import { useWorkspaceMembers } from '@/components/WorkspaceMembers';
-import { gmailComposeUrl } from '@/lib/gmail';
+import { composeWindowFeatures, gmailComposeUrl } from '@/lib/gmail';
 import { toneFromName } from '@/lib/person-tone';
 import type { Page, TaskItem, FloatingMenuPosition } from '@/lib/crm-types';
 
@@ -115,7 +115,7 @@ export function useNow(intervalMs=30000){
 /** Opens Gmail with the address filled in. Phones keep the normal mail link, because Gmail's web compose page is unreliable there. */
 export function EmailLink({email,className,children}:{email:string;className?:string;children?:React.ReactNode}){
   const {currentMember}=useWorkspaceMembers();
-  return <a className={className} href={gmailComposeUrl(email,currentMember?.email)} target="_blank" rel="noreferrer" onClick={event=>{event.stopPropagation();if(window.matchMedia('(pointer:coarse)').matches){event.preventDefault();window.location.href=`mailto:${email}`}}}>{children||email}</a>;
+  return <a className={className} href={gmailComposeUrl(email,currentMember?.email)} target="_blank" rel="noreferrer" onClick={event=>{event.stopPropagation();if(window.matchMedia('(pointer:coarse)').matches){event.preventDefault();window.location.href=`mailto:${email}`;return}if(event.ctrlKey||event.metaKey||event.shiftKey)return;const compose=window.open(event.currentTarget.href,'_blank',composeWindowFeatures(window.screen as Screen&{availLeft?:number;availTop?:number}));if(compose){compose.opener=null;event.preventDefault()}}}>{children||email}</a>;
 }
 
 export function ScoutLogo({className='',logoUrl}:{className?:string;logoUrl?:string}){

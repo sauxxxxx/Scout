@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { accentColors, accentHex, customizationSchema, defaultCustomization, defaultTaskTypes, parseCustomization, publicBranding, statusLabelOf } from '@/lib/customization';
+import { composeWindowFeatures } from '@/lib/gmail';
 import { inkKeyframes } from '@/lib/ink-spread';
 import { sendInvitationEmail } from '@/lib/invitation-email';
 import { peopleLooks, PERSON_TONES, toneFromName } from '@/lib/person-tone';
@@ -252,5 +253,19 @@ describe('person colours', () => {
     expect(toneFromName('Gone Person')).toBe(toneFromName('Gone Person'));
     expect(toneFromName('Gone Person')).toBeGreaterThanOrEqual(1);
     expect(toneFromName('Gone Person')).toBeLessThanOrEqual(PERSON_TONES);
+  });
+});
+
+describe('Gmail compose window', () => {
+  it('sits near the right of a normal screen', () => {
+    expect(composeWindowFeatures({ availWidth: 1920, availHeight: 1080 })).toBe('popup=yes,width=720,height=680,left=1160,top=360');
+  });
+
+  it('follows the screen it is on', () => {
+    expect(composeWindowFeatures({ availLeft: 1920, availTop: 30, availWidth: 1920, availHeight: 1050 })).toBe('popup=yes,width=720,height=680,left=3080,top=360');
+  });
+
+  it('never runs past a small screen', () => {
+    expect(composeWindowFeatures({ availWidth: 600, availHeight: 500 })).toBe('popup=yes,width=600,height=500,left=0,top=0');
   });
 });
