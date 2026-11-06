@@ -7,7 +7,7 @@ export const leadColumnOptions = [
 export type LeadColumn = (typeof leadColumnOptions)[number]['key'];
 
 export const overviewSectionOptions = [
-  { key: 'results', label: 'Results' }, { key: 'team', label: 'Team results' }, { key: 'pipeline', label: 'Right now' }, { key: 'followups', label: 'Today’s follow-ups' },
+  { key: 'pipeline', label: 'Pipeline and next follow-up' }, { key: 'results', label: 'Results' }, { key: 'followups', label: 'Today\u2019s follow-ups' }, { key: 'team', label: 'Team results' },
 ] as const;
 export type OverviewSection = (typeof overviewSectionOptions)[number]['key'];
 

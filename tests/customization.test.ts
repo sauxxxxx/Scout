@@ -155,3 +155,19 @@ describe('invitation email branding', () => {
     expect(html).toContain('https://scout.example/scout-logo.png');
   });
 });
+
+describe('bento colours', () => {
+  const token = (name: string, block: string) => block.match(new RegExp(`${name}:(#[0-9a-f]+)`))?.[1] as string;
+  const light = css.slice(css.indexOf('--bento-canvas:#e9ecef')).split('}')[0];
+  const dark = css.slice(css.indexOf('--bento-canvas:#0e1114')).split('}')[0];
+
+  it('keeps pipeline stages readable in light and dark mode', () => {
+    for (const block of [light, dark]) for (const stage of [1, 2, 3, 4]) expect(contrast(token(`--bento-stage-${stage}`, block), '#ffffff')).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(token('--bento-pop', light), token('--bento-on-pop', light))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('keeps the dark tile readable', () => {
+    expect(contrast(token('--bento-dark', light), '#c7ced6')).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(token('--bento-dark', dark), token('--bento-on-dark-muted', dark))).toBeGreaterThanOrEqual(4.5);
+  });
+});
