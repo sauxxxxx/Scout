@@ -1,7 +1,7 @@
 import { markLeadChanged, refreshLeadTouch } from '@/lib/lead-touch-store';
 
 const MAX_RECIPIENTS = 20;
-const tokenPattern = /^log+([a-f0-9]{32})@/;
+const tokenPattern = /^log\+([a-f0-9]{32})@/;
 const emailPattern = /[a-z0-9._%+'-]+@[a-z0-9.-]+\.[a-z]{2,}/g;
 
 export const validEmailLogDomain = (domain?: string) => {

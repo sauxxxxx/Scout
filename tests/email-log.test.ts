@@ -23,7 +23,7 @@ describe('email tracking', () => {
   });
 
   it('gives each rep one private address that stays the same', async () => {
-    expect(address).toMatch(/^log-[a-f0-9]{32}@mail\.scout\.test$/);
+    expect(address).toMatch(/^log\+[a-f0-9]{32}@mail\.scout\.test$/);
     expect(await emailLogAddress(store.db, 'w', 'u-ana', 'mail.scout.test')).toBe(address);
   });
 
@@ -77,7 +77,7 @@ describe('email tracking', () => {
 
   it('ignores addresses Scout did not hand out', async () => {
     lead('lead-1', 'owner@clinic.com');
-    for (const fake of ['log-00000000000000000000000000000000@mail.scout.test', 'hello@mail.scout.test']) expect(await logSentEmail(store.db, { address: fake, to: 'owner@clinic.com', at })).toBe(0);
+    for (const fake of ['log+00000000000000000000000000000000@mail.scout.test', 'log@mail.scout.test', 'hello@mail.scout.test']) expect(await logSentEmail(store.db, { address: fake, to: 'owner@clinic.com', at })).toBe(0);
   });
 
   it('stops logging for a removed rep', async () => {
@@ -108,7 +108,7 @@ describe('reading email headers', () => {
 
 describe('Gmail compose link', () => {
   it('adds the tracking address as BCC only when there is one', () => {
-    expect(new URL(gmailComposeUrl('a@b.com', 'rep@x.co', 'log-1@mail.x.co')).searchParams.get('bcc')).toBe('log-1@mail.x.co');
+    expect(new URL(gmailComposeUrl('a@b.com', 'rep@x.co', 'log+1@x.co')).searchParams.get('bcc')).toBe('log+1@x.co');
     expect(new URL(gmailComposeUrl('a@b.com', 'rep@x.co')).searchParams.has('bcc')).toBe(false);
   });
 });
