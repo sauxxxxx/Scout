@@ -41,6 +41,7 @@ export function OpportunityPipeline({opportunities,companies,contacts,leads,task
   const lastDragEnd=useRef(0);
   const boardRef=useRef<HTMLDivElement|null>(null);
   const [draggedId,setDraggedId]=useState<string|null>(null);
+  const [justWon,setJustWon]=useState<string|null>(null);
   const [dragOverStage,setDragOverStage]=useState<string|null>(null);
   const money=(value:number)=>new Intl.NumberFormat('en-PH',{style:'currency',currency:preferences.currency,maximumFractionDigits:0}).format(value);
 
@@ -67,7 +68,7 @@ export function OpportunityPipeline({opportunities,companies,contacts,leads,task
     if(!pending)return;
     const saved=await onSave({...pending.opportunity,stage:pending.stage,probability:probabilities[pending.stage],outcome:reason||undefined});
     if(!saved)return;
-    notify(`Opportunity marked ${statusLabel(pending.stage)}`);
+    if(pending.stage==='Won'){setSelectedId(null);setExpandedStages(value=>value.includes('Won')?value:[...value,'Won']);setJustWon(pending.opportunity.id);window.setTimeout(()=>setJustWon(null),2000);notify(`Deal won: ${pending.opportunity.name}, ${money(pending.opportunity.value)}`)}else notify(`Opportunity marked ${statusLabel(pending.stage)}`);
     setPending(null);
     setReason('');
   };
@@ -92,7 +93,7 @@ export function OpportunityPipeline({opportunities,companies,contacts,leads,task
       <header><div><span><i/>{statusLabel(stage)}</span><b>{stageItems.length}</b><button className="pipeline-column-add" aria-label={`Add opportunity to ${statusLabel(stage)}`} title="Add opportunity" onClick={()=>beginCreate(stage)}><FiPlus/></button></div></header>
       {collapsed?<button className="pipeline-expand" aria-label={`Show ${statusLabel(stage)} opportunities`} onClick={()=>setExpandedStages(value=>[...value,stage])}><strong>{money(stageItems.reduce((sum,item)=>sum+item.value,0))}</strong><small>Show</small></button>:<div className="pipeline-column-scroll">{stageItems.map(item=>{
         const lead=leadFor(item);const contact=contactFor(item);const nextTask=nextTaskFor(item);
-        return <article className={draggedId===item.id?'dragging':''} draggable onDragStart={event=>{event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',item.id);setDraggedId(item.id)}} onDragEnd={()=>{lastDragEnd.current=Date.now();setDraggedId(null);setDragOverStage(null)}} onClick={()=>{if(Date.now()-lastDragEnd.current>250)setSelectedId(item.id)}} key={item.id}>
+        return <article className={`${draggedId===item.id?'dragging':''}${justWon===item.id?' just-won':''}`} draggable onDragStart={event=>{event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',item.id);setDraggedId(item.id)}} onDragEnd={()=>{lastDragEnd.current=Date.now();setDraggedId(null);setDragOverStage(null)}} onClick={()=>{if(Date.now()-lastDragEnd.current>250)setSelectedId(item.id)}} key={item.id}>
           <div className="pipeline-card-head"><strong>{item.name}</strong>{cardProperties.value&&<b>{money(item.value)}</b>}</div>
           <p>{companyName(item.companyId)}</p>
           {mode==='Board'&&<div className="pipeline-card-compact">

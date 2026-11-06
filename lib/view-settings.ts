@@ -21,15 +21,13 @@ export const savedFilterSchema = z.object({
 export type SavedFilter = z.infer<typeof savedFilterSchema>;
 
 export const viewSettingsSchema = z.object({
-  sidebarCollapsed: z.boolean(),
   leadColumns: z.array(z.object({ key: z.enum(leadColumnKeys), visible: z.boolean() }).strict()).max(leadColumnKeys.length),
   overviewSections: z.array(z.object({ key: z.enum(overviewSectionKeys), visible: z.boolean() }).strict()).max(overviewSectionKeys.length),
   savedFilters: z.array(savedFilterSchema).max(20),
-}).strict();
+});
 export type ViewSettings = z.infer<typeof viewSettingsSchema>;
 
 export const defaultViewSettings: ViewSettings = {
-  sidebarCollapsed: false,
   leadColumns: leadColumnKeys.map(key => ({ key, visible: !['priority', 'city', 'phone', 'email'].includes(key) })),
   overviewSections: overviewSectionKeys.map(key => ({ key, visible: true })),
   savedFilters: [],

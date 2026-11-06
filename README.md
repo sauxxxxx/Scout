@@ -59,7 +59,7 @@ Copy these from `.env.example`. Secrets belong in Cloudflare, never in the repo.
 | `lib/view-settings.ts` | Each person's columns, saved views and layout |
 | `lib/use-record-sync.ts` | Background saving, rollback and conflicts |
 | `components/DialogManager.tsx` | Focus, Escape and unsaved-changes handling for every dialog and drawer |
-| `app/globals.css` | Design tokens at the top, with dark values under `[data-theme=dark]` |
+| `app/globals.css` | Design tokens at the top, with dark values under `[data-theme=dark]`. The floating bento layer is at the end, using the `--bento-*` tokens. |
 
 ## Who sees what
 
@@ -76,7 +76,7 @@ Records always store the original status, such as `Interested`, and the name is 
 
 Logos are served without sign-in, because sign-in pages and emails show them. SVG isn't accepted, since it can carry scripts.
 
-Each person sets their own font size and row spacing in Preferences. Table columns, saved views, the side menu and the Overview layout save as they're changed, through `/api/profile/view`.
+Each person sets their own font size and row spacing in Preferences. Table columns, saved views and the Overview layout save as they're changed, through `/api/profile/view`.
 
 ## Reports
 

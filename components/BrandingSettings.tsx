@@ -63,7 +63,7 @@ function BrandingForm(props: FormProps) {
     <div className="page-head"><h1>Branding</h1><div className="page-actions">{changed && <button className="secondary" onClick={() => { setDraft(saved); applyAccent(saved.accent); }}>Cancel</button>}<button className="primary" disabled={saving || uploading || !changed} onClick={() => void save(draft)}>{saving ? 'Saving…' : 'Save changes'}</button></div></div>
     <section className="workspace-settings">
       <h2>Colour</h2>
-      <div className="workspace-setting stacked"><div><strong>Accent colour</strong><span>Used for buttons, links and selected items, for everyone in this workspace.</span></div>
+      <div className="workspace-setting stacked"><div><strong>Accent colour</strong><span>Used for links, highlights and selected items, for everyone in this workspace.</span></div>
         <div className="accent-picker" role="radiogroup" aria-label="Accent colour">{accentColors.map(accent => <button type="button" role="radio" aria-checked={draft.accent === accent} key={accent} onClick={() => preview(accent)}><i style={{ background: accentHex[accent] }}>{draft.accent === accent && <FiCheck />}</i>{accent}</button>)}</div>
       </div>
       <h2>Logo</h2>

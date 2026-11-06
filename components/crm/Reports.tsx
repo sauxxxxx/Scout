@@ -8,7 +8,7 @@ import { ExportMenu } from '@/components/crm/ExportMenu';
 import { TrendBars } from '@/components/crm/TrendBars';
 import { formatDate } from '@/lib/format';
 import { describeChange, overviewPeriods, periodRange, type OverviewPeriod } from '@/lib/overview-period';
-import { customRange, daysBetween, emptyCounts, hasActivity, MAX_CUSTOM_DAYS, reportBuckets, reportMetrics, type Report, type ReportBucket, type ReportCounts, type ReportMetric, type ReportRecord } from '@/lib/reports';
+import { customRange, daysBetween, emptyCounts, hasActivity, MAX_CUSTOM_DAYS, reportBuckets, reportMetrics, reportSummary, type Report, type ReportBucket, type ReportCounts, type ReportMetric, type ReportRecord } from '@/lib/reports';
 import { localIso } from '@/lib/task-dates';
 
 type Period = OverviewPeriod | 'Custom';
@@ -98,6 +98,7 @@ export function Reports({ currency, notify, openLead }: { currency: string; noti
     {failed && <p className="overview-load-failed" role="status">This report could not be updated. Check your connection and try again.</p>}
     {!report && !failed && !customProblem && <PageSkeleton />}
     {report && range && <>
+      {(() => { const summary = reportSummary(report.current, report.previous, range.previousLabel, !seesTeam ? 'You' : person === 'All team' ? 'The team' : person, money); return <p className="report-summary">{summary.headline}{summary.detail && <small>{summary.detail}</small>}</p>; })()}
       <section className="report-tiles" aria-label={`Totals for ${label}`}>{reportMetrics.map(metric => {
         const value = report.current[metric.key];
         const note = describeChange(value, report.previous[metric.key], range.previousLabel);

@@ -121,8 +121,8 @@ describe('personal view settings', () => {
   it('uses the defaults when stored settings are damaged', () => {
     expect(parseViewSettings('')).toEqual(defaultViewSettings);
     expect(parseViewSettings('{oops')).toEqual(defaultViewSettings);
-    expect(parseViewSettings('{"sidebarCollapsed":"yes"}')).toEqual(defaultViewSettings);
-    expect(parseViewSettings('{"sidebarCollapsed":true}').sidebarCollapsed).toBe(true);
+    expect(parseViewSettings('{"savedFilters":"yes"}')).toEqual(defaultViewSettings);
+    expect(parseViewSettings('{"sidebarCollapsed":true}')).toEqual(defaultViewSettings);
   });
 
   it('limits saved views and refuses unknown columns', () => {
@@ -157,6 +157,13 @@ describe('invitation email branding', () => {
 });
 
 describe('bento colours', () => {
+  it('keeps the highlight readable with every accent colour', () => {
+    for (const accent of accentColors.filter(item => item !== 'Scout green')) {
+      const pop = css.slice(css.indexOf(`html[data-accent='${accent}'] { --bento-pop`)).match(/--bento-pop:(#[0-9a-f]+)/)?.[1] as string;
+      expect(contrast(pop, '#14181d')).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
   const token = (name: string, block: string) => block.match(new RegExp(`${name}:(#[0-9a-f]+)`))?.[1] as string;
   const light = css.slice(css.indexOf('--bento-canvas:#e9ecef')).split('}')[0];
   const dark = css.slice(css.indexOf('--bento-canvas:#0e1114')).split('}')[0];

@@ -93,4 +93,18 @@ export function reportTable(report: Report, view: 'rep' | 'day', from: string, t
   return { headers, rows: [...rows, ['Total', ...columns.map(column => report.current[column.key])]] as (string | number)[][] };
 }
 
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
+
+/** The period in one plain sentence, followed by the biggest change. */
+export function reportSummary(current: ReportCounts, previous: ReportCounts, previousLabel: string, who: string, money: (value: number) => string) {
+  const work = [current.calls && plural(current.calls, 'call'), current.followUps && plural(current.followUps, 'follow-up'), current.proposals && plural(current.proposals, 'proposal')].filter(Boolean) as string[];
+  const list = work.length > 1 ? `${work.slice(0, -1).join(', ')} and ${work[work.length - 1]}` : work[0];
+  const won = current.wonCount ? `won ${plural(current.wonCount, 'deal')} worth ${money(current.wonValue)}` : '';
+  const headline = list && won ? `${who} made ${list}, and ${won}.` : list ? `${who} made ${list}.` : won ? `${who} ${won}.` : current.newLeads ? `${who} added ${plural(current.newLeads, 'prospect')}.` : 'Nothing recorded for this period yet.';
+  const changes = (['calls', 'followUps', 'proposals', 'wonCount'] as const).filter(key => previous[key] > 0 && current[key] !== previous[key]).map(key => ({ key, change: (current[key] - previous[key]) / previous[key] })).sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
+  const names = { calls: 'Calls', followUps: 'Follow-ups', proposals: 'Proposals', wonCount: 'Deals won' };
+  const top = changes[0];
+  return { headline, detail: top ? `${names[top.key]} are ${top.change > 0 ? 'up' : 'down'} ${Math.round(Math.abs(top.change) * 100)}% from ${previousLabel}.` : '' };
+}
+
 export const hasActivity = (row: ReportCounts) => (Object.keys(emptyCounts) as (keyof ReportCounts)[]).some(key => row[key] > 0);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { periodRange } from '@/lib/overview-period';
 import { zoneModifier, validDay } from '@/lib/report-store';
-import { activityField, addCounts, customRange, daysBetween, emptyCounts, firstProposals, hasActivity, isReportMetric, reportBuckets, reportTable, type DayReport, type Report } from '@/lib/reports';
+import { activityField, addCounts, customRange, daysBetween, emptyCounts, firstProposals, hasActivity, isReportMetric, reportBuckets, reportSummary, reportTable, type DayReport, type Report } from '@/lib/reports';
 
 const day = (date: string, counts: Partial<DayReport> = {}): DayReport => ({ ...emptyCounts, day: date, ...counts });
 
@@ -117,5 +117,23 @@ describe('report rows', () => {
     expect(table.headers[0]).toBe('Period');
     expect(table.rows).toHaveLength(2);
     expect(table.rows[0][2]).toBe(5);
+  });
+});
+
+describe('report summary', () => {
+  const money = (value: number) => `₱${value}`;
+  it('says what happened in one sentence', () => {
+    expect(reportSummary({ ...emptyCounts, calls: 12, proposals: 1, wonCount: 2, wonValue: 900 }, emptyCounts, 'October', 'The team', money).headline).toBe('The team made 12 calls and 1 proposal, and won 2 deals worth ₱900.');
+    expect(reportSummary({ ...emptyCounts, calls: 1 }, emptyCounts, 'October', 'You', money).headline).toBe('You made 1 call.');
+    expect(reportSummary({ ...emptyCounts, wonCount: 1, wonValue: 50 }, emptyCounts, 'October', 'Ben Cruz', money).headline).toBe('Ben Cruz won 1 deal worth ₱50.');
+    expect(reportSummary({ ...emptyCounts, newLeads: 3 }, emptyCounts, 'October', 'You', money).headline).toBe('You added 3 prospects.');
+    expect(reportSummary(emptyCounts, emptyCounts, 'October', 'You', money).headline).toBe('Nothing recorded for this period yet.');
+  });
+
+  it('points out the biggest change, and never divides by nothing', () => {
+    const previous = { ...emptyCounts, calls: 10, followUps: 10 };
+    expect(reportSummary({ ...emptyCounts, calls: 11, followUps: 5 }, previous, 'October', 'You', money).detail).toBe('Follow-ups are down 50% from October.');
+    expect(reportSummary({ ...emptyCounts, calls: 5 }, emptyCounts, 'October', 'You', money).detail).toBe('');
+    expect(reportSummary({ ...emptyCounts, calls: 10 }, { ...emptyCounts, calls: 10 }, 'October', 'You', money).detail).toBe('');
   });
 });
