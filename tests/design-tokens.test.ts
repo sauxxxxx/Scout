@@ -40,3 +40,9 @@ describe('Scout appearance preference', () => {
     expect([...css.matchAll(/font-size:s*[d.]+(px|rem)/g)].map(match => match[0])).toEqual([]);
   });
 });
+
+describe('card styling', () => {
+  it('never marks a card with a coloured edge stripe', () => {
+    expect(css.match(/border-left-color|border-left(-width)?:s*[2-9]px/g)).toBeNull();
+  });
+});
