@@ -7,7 +7,7 @@ import { syncLeadCoreCrm } from '@/lib/foundation-store';
 import { recordAudit } from '@/lib/audit';
 import { notifyMember } from '@/lib/notifications';
 import { guardRecord } from '@/lib/record-scope';
-import { handOverLead } from '@/lib/lead-touch-store';
+import { detailsChanged, handOverLead, leadDetails } from '@/lib/lead-touch-store';
 
 export const dynamic = 'force-dynamic';
 
@@ -71,9 +71,12 @@ export async function PATCH(request: Request) {
   if (!lead.id || !lead.version) return Response.json({ error: 'Stable ID and version are required.' }, { status: 400 });
   const blocked = await guardRecord(auth, 'lead', lead.id);
   if (blocked) return blocked;
-  const before = await auth.db.prepare('SELECT owner FROM leads WHERE id=? AND workspace_id=?').bind(lead.id, auth.session.workspace.id).first<{ owner: string }>();
-  const result = await auth.db.prepare(`UPDATE leads SET company_id=COALESCE(?,company_id),primary_contact_id=COALESCE(?,primary_contact_id),name=?,industry=?,city=?,status=?,score=?,owner=?,last=?,next=?,phone=?,email=?,contact=?,priority=?,opportunity=?,value=?,probability=?,close_date=?,archived=?,version=version+1,updated_at=CURRENT_TIMESTAMP,changed_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND version=?`)
-    .bind(lead.companyId??null,lead.primaryContactId??null,lead.name, lead.industry, lead.city, lead.status, lead.score, lead.owner, lead.last, lead.next, lead.phone, lead.email, lead.contact, lead.priority, lead.opportunity, lead.value ?? null, lead.probability ?? null, lead.closeDate ?? null, lead.archived ? 1 : 0, lead.id, auth.session.workspace.id, lead.version).run();
+  // Compared with what the screen shows, because the name, city and contact can come from the linked company.
+  const stored = await auth.db.prepare(`SELECT ${leadColumns} ${leadJoins} WHERE leads.id=? AND leads.workspace_id=?`).bind(lead.id, auth.session.workspace.id).first<Record<string, unknown>>();
+  const before = stored ? mapLead(stored) : null;
+  const changed = detailsChanged(before ? { ...before, archived: !!before.archived } : null, { ...lead, archived: !!lead.archived }, leadDetails);
+  const result = await auth.db.prepare(`UPDATE leads SET company_id=COALESCE(?,company_id),primary_contact_id=COALESCE(?,primary_contact_id),name=?,industry=?,city=?,status=?,score=?,owner=?,last=?,next=?,phone=?,email=?,contact=?,priority=?,opportunity=?,value=?,probability=?,close_date=?,archived=?,changed_at=CASE WHEN ?=1 THEN CURRENT_TIMESTAMP ELSE COALESCE(changed_at,updated_at) END,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND version=?`)
+    .bind(lead.companyId??null,lead.primaryContactId??null,lead.name, lead.industry, lead.city, lead.status, lead.score, lead.owner, lead.last, lead.next, lead.phone, lead.email, lead.contact, lead.priority, lead.opportunity, lead.value ?? null, lead.probability ?? null, lead.closeDate ?? null, lead.archived ? 1 : 0, changed ? 1 : 0, lead.id, auth.session.workspace.id, lead.version).run();
   if (!result.meta.changes) return Response.json({ error: 'This lead changed elsewhere. Refresh and try again.', conflict: true }, { status: 409 });
   if (before && before.owner !== lead.owner) {
     await handOverLead(auth.db, auth.session.workspace.id, lead.id, before.owner, lead.owner);

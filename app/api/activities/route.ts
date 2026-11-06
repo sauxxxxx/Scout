@@ -4,7 +4,7 @@ import { activityFiles, mapActivity } from '@/lib/activity-store';
 import { recordAudit } from '@/lib/audit';
 import { guardRecord, seesOnlyOwnRecords } from '@/lib/record-scope';
 import { ownScope } from '@/lib/lead-query';
-import { refreshLeadTouch } from '@/lib/lead-touch-store';
+import { activityDetails, detailsChanged, markLeadChanged, refreshLeadTouch } from '@/lib/lead-touch-store';
 import { isoInZone } from '@/lib/task-dates';
 import { activityInputSchema, validationError } from '@/lib/validation';
 
@@ -96,6 +96,7 @@ export async function POST(request: Request) {
   await auth.db.prepare(`INSERT INTO activities (uid,workspace_id,id,version,lead,lead_id,company_id,contact_id,opportunity_id,type,detail,time,owner,status,occurred_at,outcome,duration,subject,value,document_link,attachment_key,attachment_name,related_task_id,related_task_uid,opportunity,deleted_at,updated_at) VALUES (?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)`)
     .bind(uid, auth.session.workspace.id, activity.id, ...values(activity,linked as {leadId:string;companyId:string;contactId?:string;opportunityId?:string;taskUid?:string})).run();
   await refreshLeadTouch(auth.db, auth.session.workspace.id, linked.leadId, activity.type);
+  await markLeadChanged(auth.db, auth.session.workspace.id, linked.leadId);
   const row = await auth.db.prepare('SELECT * FROM activities WHERE uid=? AND workspace_id=?').bind(uid, auth.session.workspace.id).first<Parameters<typeof mapActivity>[0]>();
   return NextResponse.json({ activity: mapActivity(row!) }, { status: 201 });
 }
@@ -114,11 +115,13 @@ export async function PATCH(request: Request) {
     if (!current?.deleted_at) return NextResponse.json({ error: 'Your role does not allow deleting records.' }, { status: 403 });
   }
   const linked=await relationships(auth.db,auth.session.workspace.id,activity);if(!linked.leadId)return NextResponse.json({error:'The selected lead does not exist in this workspace.'},{status:422});
+  const before = await auth.db.prepare('SELECT * FROM activities WHERE uid=? AND workspace_id=?').bind(activity.uid, auth.session.workspace.id).first<Record<string, unknown>>();
   const result = await auth.db.prepare(`UPDATE activities SET ${columns},version=version+1,updated_at=CURRENT_TIMESTAMP WHERE uid=? AND workspace_id=? AND version=?`)
     .bind(...values(activity,linked as {leadId:string;companyId:string;contactId?:string;opportunityId?:string;taskUid?:string}), activity.uid, auth.session.workspace.id, activity.version).run();
   if (!result.meta.changes) return NextResponse.json({ error: 'This activity changed elsewhere. Refresh and try again.', conflict: true }, { status: 409 });
   await refreshLeadTouch(auth.db, auth.session.workspace.id, linked.leadId, activity.type);
   const row = await auth.db.prepare('SELECT * FROM activities WHERE uid=? AND workspace_id=?').bind(activity.uid, auth.session.workspace.id).first<Parameters<typeof mapActivity>[0]>();
+  if (detailsChanged(before, row, activityDetails)) await markLeadChanged(auth.db, auth.session.workspace.id, linked.leadId);
   return NextResponse.json({ activity: mapActivity(row!) });
 }
 
@@ -133,7 +136,10 @@ export async function DELETE(request: Request) {
   if (!row) return NextResponse.json({ error: 'Activity not found.' }, { status: 404 });
   if (row.attachment_key) await activityFiles().delete(row.attachment_key);
   await auth.db.prepare('DELETE FROM activities WHERE uid=? AND workspace_id=?').bind(uid, auth.session.workspace.id).run();
-  if (row.lead_id) await refreshLeadTouch(auth.db, auth.session.workspace.id, row.lead_id, row.type);
+  if (row.lead_id) {
+    await refreshLeadTouch(auth.db, auth.session.workspace.id, row.lead_id, row.type);
+    await markLeadChanged(auth.db, auth.session.workspace.id, row.lead_id);
+  }
   await recordAudit(auth, 'activity.deleted', uid);
   return NextResponse.json({ deleted: uid });
 }

@@ -51,6 +51,7 @@ const dayOf = offset => new Date(manilaNow.getTime() + offset * 86400000).toISOS
 const clock = (offset, time) => `${dayOf(offset)}T${time}`;
 const utcStamp = (offset, hours = 2) => new Date(Date.parse(`${dayOf(offset)}T00:00:00Z`) + hours * 3600000).toISOString().slice(0, 19).replace('T', ' ');
 const shortDate = offset => new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(Date.parse(`${dayOf(offset)}T12:00:00Z`));
+const nowClock = manilaNow.toISOString().slice(0, 16);
 const workHour = () => `${String(between(8, 17)).padStart(2, '0')}:${pick(['00', '15', '30', '45'])}`;
 
 const owner = db.prepare("SELECT u.id,u.name FROM workspace_memberships m JOIN users u ON u.id=m.user_id WHERE m.workspace_id=? AND m.role='owner' LIMIT 1").get(WORKSPACE);
@@ -103,7 +104,7 @@ const names = new Set();
 let activityCount = 0;
 const log = (lead, type, detail, offset) => {
   activityCount += 1;
-  const when = clock(offset, workHour());
+  const when = [clock(offset, workHour()), nowClock].sort()[0]; // Never later than now, or "today" shows a time that hasn't happened.
   insert.activity.run(uuid('a', activityCount), WORKSPACE, 8000000 + activityCount, lead.name, lead.id, lead.company, type, detail, when, lead.owner, when, utcStamp(offset), utcStamp(offset));
   if (!lead.touch || when > lead.touch) lead.touch = when;
 };

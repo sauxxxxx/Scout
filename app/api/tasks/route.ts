@@ -1,4 +1,5 @@
 import { authenticateRequest } from '@/lib/auth';
+import { detailsChanged, markLeadChanged, taskDetails } from '@/lib/lead-touch-store';
 import { pageParams } from '@/lib/lead-query';
 import { mapTask } from '@/lib/workspace-store';
 import { taskInputSchema, validationError } from '@/lib/validation';
@@ -52,6 +53,7 @@ export async function POST(request: Request) {
     .bind(uid, auth.session.workspace.id, task.id, ...values(task,linked,auth.session.timezone)).run();
   await auth.db.prepare("UPDATE tasks SET completed_at=CASE WHEN status='Completed' THEN COALESCE(completed_at,CURRENT_TIMESTAMP) ELSE NULL END WHERE uid=? AND workspace_id=?").bind(uid, auth.session.workspace.id).run();
   await notifyMember(auth, task.owner, 'leadAssignments', 'Task assigned to you', task.title, '?page=tasks');
+  await markLeadChanged(auth.db, auth.session.workspace.id, linked.leadId);
   const row = await auth.db.prepare('SELECT * FROM tasks WHERE uid=? AND workspace_id=?').bind(uid, auth.session.workspace.id).first<Record<string, unknown>>();
   return Response.json({ task: mapTask(row!) }, { status: 201 });
 }
@@ -66,7 +68,7 @@ export async function PATCH(request: Request) {
   const blocked = await guardRecord(auth, 'task', task.uid);
   if (blocked) return blocked;
   const linked=await linkedLead(auth.db,auth.session.workspace.id,task);if(!linked)return Response.json({error:'The selected lead does not exist in this workspace.'},{status:422});
-  const before = await auth.db.prepare('SELECT owner FROM tasks WHERE uid=? AND workspace_id=?').bind(task.uid, auth.session.workspace.id).first<{ owner: string }>();
+  const before = await auth.db.prepare('SELECT * FROM tasks WHERE uid=? AND workspace_id=?').bind(task.uid, auth.session.workspace.id).first<Record<string, unknown>>();
   const result = await auth.db.prepare(`UPDATE tasks SET ${taskColumns},version=version+1,updated_at=CURRENT_TIMESTAMP WHERE uid=? AND workspace_id=? AND version=?`)
     .bind(...values(task,linked,auth.session.timezone), task.uid, auth.session.workspace.id, task.version).run();
   if (!result.meta.changes) return Response.json({ error: 'This task changed elsewhere. Refresh and try again.', conflict: true }, { status: 409 });
@@ -74,6 +76,7 @@ export async function PATCH(request: Request) {
   await auth.db.prepare("UPDATE tasks SET completed_at=CASE WHEN status='Completed' THEN COALESCE(completed_at,CURRENT_TIMESTAMP) ELSE NULL END WHERE uid=? AND workspace_id=?").bind(task.uid, auth.session.workspace.id).run();
   if (before && before.owner !== task.owner) await notifyMember(auth, task.owner, 'leadAssignments', 'Task assigned to you', task.title, '?page=tasks');
   const row = await auth.db.prepare('SELECT * FROM tasks WHERE uid=? AND workspace_id=?').bind(task.uid, auth.session.workspace.id).first<Record<string, unknown>>();
+  if (detailsChanged(before, row, taskDetails)) await markLeadChanged(auth.db, auth.session.workspace.id, linked.leadId);
   return Response.json({ task: mapTask(row!) });
 }
 
@@ -84,8 +87,10 @@ export async function DELETE(request: Request) {
   if (!uid) return Response.json({ error: 'Stable task ID is required.' }, { status: 400 });
   const blocked = await guardRecord(auth, 'task', uid);
   if (blocked) return blocked;
+  const task = await auth.db.prepare('SELECT lead_id FROM tasks WHERE uid=? AND workspace_id=?').bind(uid, auth.session.workspace.id).first<{ lead_id: string | null }>();
   const result = await auth.db.prepare('DELETE FROM tasks WHERE uid=? AND workspace_id=?').bind(uid, auth.session.workspace.id).run();
   if (!result.meta.changes) return Response.json({ error: 'Task not found.' }, { status: 404 });
+  if (task?.lead_id) await markLeadChanged(auth.db, auth.session.workspace.id, task.lead_id);
   await recordAudit(auth, 'task.deleted', uid);
   return Response.json({ deleted: uid });
 }

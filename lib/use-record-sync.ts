@@ -19,6 +19,8 @@ type Options<T> = {
   same: (left: T, right: T) => boolean;
   merge: (item: T, saved: T) => T;
   normalize?: (saved: T) => T;
+  /** Runs after a batch of saves, because the server may have changed related records too. */
+  onSaved?: () => void;
   delay?: number;
   onProblem: (problem: SyncProblem) => void;
 };
@@ -31,13 +33,13 @@ async function readResponse(response: Response) {
  * Saves local changes in the background. A record the server refuses is rolled back and reported, so the screen
  * never shows something that was not stored. A conflict keeps the person's edit and waits for their decision.
  */
-export function useRecordSync<T>({ enabled, items, setItems, baseline, keyOf, withKeys, holdBack, endpoint, responseKey, labelOf, same, merge, normalize, delay = 300, onProblem }: Options<T>) {
+export function useRecordSync<T>({ enabled, items, setItems, baseline, keyOf, withKeys, holdBack, endpoint, responseKey, labelOf, same, merge, normalize, onSaved, delay = 300, onProblem }: Options<T>) {
   const syncing = useRef(false);
   const busy = useRef(false);
   const held = useRef(new Set<string>());
   const [attempt, setAttempt] = useState(0);
-  const latest = useRef({ keyOf, withKeys, holdBack, labelOf, same, merge, normalize, onProblem });
-  useEffect(() => { latest.current = { keyOf, withKeys, holdBack, labelOf, same, merge, normalize, onProblem }; });
+  const latest = useRef({ keyOf, withKeys, holdBack, labelOf, same, merge, normalize, onSaved, onProblem });
+  useEffect(() => { latest.current = { keyOf, withKeys, holdBack, labelOf, same, merge, normalize, onSaved, onProblem }; });
 
   useEffect(() => {
     const { keyOf: key, withKeys: addKeys, holdBack: hold, same: matches } = latest.current;
@@ -95,6 +97,7 @@ export function useRecordSync<T>({ enabled, items, setItems, baseline, keyOf, wi
         syncing.current = false;
         busy.current = false;
         setAttempt(value => value + 1);
+        latest.current.onSaved?.();
       }
     }, delay);
     return () => window.clearTimeout(timer);
