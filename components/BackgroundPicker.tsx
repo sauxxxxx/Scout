@@ -46,7 +46,7 @@ export function BackgroundPicker() {
   return <div className="background-picker">
     <span className="background-preview" style={current ? { backgroundImage: `url("${current}")` } : undefined}>{!current && <FiImage />}</span>
     <div>
-      <p>Shows around Scout for you only. Your pages stay on a frosted panel so any picture stays easy to read. It saves as soon as you choose it.</p>
+      <p>Shows behind Scout for you only, with a soft tint so text stays readable. It saves as soon as you choose it.</p>
       <div className="background-actions">
         <button type="button" className="secondary" disabled={busy} onClick={() => input.current?.click()}>{busy ? 'Uploading…' : current ? 'Change image' : 'Upload image'}</button>
         {current && <button type="button" className="text-link" disabled={busy} onClick={() => { updateView({ backgroundUrl: '' }); forget(current); }}>Remove</button>}

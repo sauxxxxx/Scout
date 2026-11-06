@@ -305,10 +305,10 @@ describe('table pages', () => {
 
 describe('background image', () => {
   const tint = (name: RegExp) => css.match(name)?.[1] as string;
-  const lightVeil = tint(/:root \{ --background-sheet:(#[0-9a-f]{8})/);
-  const darkVeil = tint(/\[data-theme=dark\] \{ --background-sheet:(#[0-9a-f]{8})/);
-  const lightMuted = tint(/:root \{ --background-sheet:#[0-9a-f]{8}; --background-muted:(#[0-9a-f]{6})/);
-  const darkMuted = tint(/\[data-theme=dark\] \{ --background-sheet:#[0-9a-f]{8}; --background-muted:(#[0-9a-f]{6})/);
+  const lightVeil = tint(/:root \{ --background-veil:(#[0-9a-f]{8})/);
+  const darkVeil = tint(/\[data-theme=dark\] \{ --background-veil:(#[0-9a-f]{8})/);
+  const lightMuted = tint(/--background-veil:#e9ecefb8; --background-muted:(#[0-9a-f]{6})/);
+  const darkMuted = tint(/--background-veil:#0e1114b8; --background-muted:(#[0-9a-f]{6})/);
   const over = (veil: string, photo: number) => {
     const opacity = parseInt(veil.slice(7, 9), 16) / 255;
     const mixed = [1, 3, 5].map(start => Math.round(parseInt(veil.slice(start, start + 2), 16) * opacity + photo * (1 - opacity)));

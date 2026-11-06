@@ -1942,20 +1942,13 @@ button,input,select,textarea { font-family:inherit; }
 .table-pager.compact .table-pager-pages { width:100%; justify-content:space-between; background:var(--surface); }
 .table-pager.compact .table-pager-pages small { display:block; color:var(--muted); font-size:var(--text-xs); }
 
-/* A personal background image. Scout floats on it as one frosted window, so no text ever sits on the raw photo. The sheet lives in the background layer because a backdrop filter on .content would trap fixed pop-ups inside it. */
-:root { --background-sheet:#e9ecefdb; --background-muted:#30363b; --background-dim:transparent; --background-window:100%; --background-gap:0px; --background-radius:0px; }
-[data-theme=dark] { --background-sheet:#0e1114db; --background-muted:#d3d7da; --background-dim:#0e111466; }
+/* A personal background image. The veil is what keeps text readable on any photo, and a test checks it against pure black and white. */
+:root { --background-veil:#e9ecefb8; --background-muted:#30363b; }
+[data-theme=dark] { --background-veil:#0e1114b8; --background-muted:#d3d7da; }
 .app-shell.has-background { position:relative; isolation:isolate; --muted:var(--background-muted); }
 .app-background { position:fixed; z-index:-1; inset:0; background-position:center; background-size:cover; }
-.app-background:before { content:''; position:absolute; inset:0; background:var(--background-dim); }
-.app-background:after { content:''; position:absolute; top:var(--background-gap); bottom:var(--background-gap); left:50%; width:var(--background-window); transform:translateX(-50%); border-radius:var(--background-radius); background:var(--background-sheet); backdrop-filter:blur(28px) saturate(1.15); }
+.app-background:after { content:''; position:absolute; inset:0; background:var(--background-veil); }
 .has-background .topbar,.has-background .context-sidebar,.has-background .content { background:transparent; }
-@media(min-width:901px){
-  :root { --background-window:min(100% - 48px,1320px); --background-gap:14px; --background-radius:28px; }
-  .has-background .topbar,.has-background .context-sidebar,.has-background .content { width:var(--background-window); margin-inline:auto; }
-  .has-background .topbar { margin-top:var(--background-gap); }
-  .has-background .content { margin-bottom:var(--background-gap); border-radius:0 0 var(--background-radius) var(--background-radius); }
-}
 .background-picker { display:flex; flex-wrap:wrap; align-items:center; gap:16px; }
 .background-picker>div { flex:1 1 260px; min-width:0; }
 .background-picker p { max-width:520px; margin:0; color:var(--muted); font-size:var(--text-sm); line-height:1.5; }
@@ -1963,6 +1956,3 @@ button,input,select,textarea { font-family:inherit; }
 .background-actions { display:flex; flex-wrap:wrap; align-items:center; gap:14px; margin-top:10px; }
 .background-actions .secondary { background:var(--surface); }
 .background-actions .text-link { align-self:center; }
-.finder-page-head>div:first-child { flex:1 1 auto; min-width:0; }
-.finder-result-actions { flex:0 1 auto; flex-wrap:wrap; justify-content:flex-end; }
-.finder-result-actions button { flex:none; height:36px; white-space:nowrap; }
