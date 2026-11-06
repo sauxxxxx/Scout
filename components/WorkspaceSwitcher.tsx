@@ -2,20 +2,17 @@
 
 import { useState } from 'react';
 import { FiX } from 'react-icons/fi';
-import { ScoutSelect } from '@/components/ScoutSelect';
 
-type Workspace = { id: string; name: string };
+/** Saves the choice on the server, then reloads so every screen shows the new workspace. */
+export async function switchWorkspace(id: string) {
+  const response = await fetch('/api/workspaces', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id }) });
+  if (response.ok) window.location.assign('/');
+}
 
-export function WorkspaceSwitcher({ current, workspaces, creating, onCloseCreate }: { current: Workspace; workspaces: Workspace[]; creating: boolean; onCloseCreate: () => void }) {
+export function WorkspaceSwitcher({ creating, onCloseCreate }: { creating: boolean; onCloseCreate: () => void }) {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-
-  const choose = async (id: string) => {
-    if (id === current.id) return;
-    const response = await fetch('/api/workspaces', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id }) });
-    if (response.ok) window.location.assign('/');
-  };
 
   const create = async () => {
     setBusy(true); setError('');
@@ -26,11 +23,6 @@ export function WorkspaceSwitcher({ current, workspaces, creating, onCloseCreate
   };
 
   return <>
-    <div className="workspace-name">
-    {workspaces.length > 1
-      ? <ScoutSelect ariaLabel="Switch workspace" value={current.id} options={workspaces.map(item => ({ value: item.id, label: item.name }))} onChange={choose} />
-      : <span>{current.name}</span>}
-    </div>
     {creating && <div className="modal-backdrop" onClick={() => onCloseCreate()}>
       <div className="modal team-dialog" role="dialog" aria-modal="true" aria-label="Create a workspace" onClick={event => event.stopPropagation()}>
         <header><h2>Create a workspace</h2><button onClick={() => onCloseCreate()} aria-label="Close"><FiX /></button></header>
