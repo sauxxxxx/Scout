@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countryName, countryOptions, DEFAULT_COUNTRY, isCountry, placeLabel, placesRegion } from '@/lib/countries';
+import { countryName, countryOptions, DEFAULT_COUNTRY, placeLabel, placesRegion } from '@/lib/countries';
 import { ensureFoundationSchema } from '@/lib/foundation-store';
 import { buildLeadFilter } from '@/lib/lead-query';
 import { leadsToCsv } from '@/lib/lead-export';
