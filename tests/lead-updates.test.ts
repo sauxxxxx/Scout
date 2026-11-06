@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ensureFoundationSchema } from '@/lib/foundation-store';
-import { formatTouchTime, setDisplayPreferences } from '@/lib/format';
+import { formatTimeOfDay, formatTouchTime, setDisplayPreferences } from '@/lib/format';
 import { activityDetails, detailsChanged, leadDetails, markCompanyLeadsChanged, markLeadChanged, opportunityDetails, refreshLeadTouch, taskDetails } from '@/lib/lead-touch-store';
 import { testD1 } from './helpers/d1';
 
@@ -68,5 +68,19 @@ describe('last touch time', () => {
   it('adds nothing when only a date was saved', () => {
     expect(formatTouchTime('2026-11-06')).toBe('');
     expect(formatTouchTime(null)).toBe('');
+  });
+});
+
+describe('task times', () => {
+  it('follows the 12 or 24-hour setting', () => {
+    setDisplayPreferences({ timeFormat: '12-hour' });
+    expect(formatTimeOfDay('17:45').replace(/\s/g, ' ').toLowerCase()).toBe('5:45 pm');
+    setDisplayPreferences({ timeFormat: '24-hour' });
+    expect(formatTimeOfDay('17:45')).toBe('17:45');
+    setDisplayPreferences({ timeFormat: '12-hour' });
+  });
+
+  it('leaves all-day tasks without a time', () => {
+    expect(formatTimeOfDay('')).toBe('');
   });
 });

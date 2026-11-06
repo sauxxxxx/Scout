@@ -1956,3 +1956,71 @@ button,input,select,textarea { font-family:inherit; }
 .background-actions { display:flex; flex-wrap:wrap; align-items:center; gap:14px; margin-top:10px; }
 .background-actions .secondary { background:var(--surface); }
 .background-actions .text-link { align-self:center; }
+
+/* Tasks calendar: the same pills and tiles as the rest of Scout */
+.task-calendar { display:flex; flex-direction:column; gap:10px; padding:0; border:0; background:transparent; }
+.task-calendar>header.calendar-toolbar { min-height:0!important; gap:10px; border:0; }
+.calendar-toolbar h2 { font-size:var(--text-lg); font-weight:600; text-align:center; }
+.calendar-nav { gap:6px; }
+.calendar-nav button,.calendar-nav button:first-child,.calendar-nav button:last-child { height:36px; display:grid; place-items:center; padding:0 15px; border-radius:var(--radius-pill); background:var(--bento-tile); color:var(--ink); font-size:var(--text-sm); }
+.calendar-nav button:first-child,.calendar-nav button:last-child { width:36px; padding:0; font-size:var(--text-md); }
+.calendar-nav button:hover { background:var(--surface-2); }
+.calendar-view-switch { gap:2px; padding:3px; border-radius:var(--radius-pill); background:var(--bento-tile); }
+.calendar-view-switch button { height:30px; padding:0 13px; border-radius:var(--radius-pill); font-size:var(--text-sm); }
+.calendar-view-switch button.active,.calendar-view-switch button.active:hover { background:var(--bento-dark); color:var(--bento-on-dark); box-shadow:none; }
+.overdue-strip { min-height:0; flex-wrap:wrap; gap:6px; padding:10px 14px; border-radius:16px; background:var(--bento-tile); }
+.overdue-strip>span { margin-right:6px; font-size:var(--text-sm); }
+.overdue-strip button { height:28px; padding:0 11px; border-radius:var(--radius-pill); font-size:var(--text-xs); }
+.week-calendar,.day-calendar,.month-calendar { max-width:none; margin:0; overflow-x:auto; border-radius:20px; background:var(--bento-tile); }
+.week-calendar-head,.all-day-row,.calendar-hour { grid-template-columns:84px repeat(7,minmax(120px,1fr)); }
+.all-day-row>span,.calendar-hour>time,.day-calendar>div>section>time { justify-content:flex-end; padding:0 12px 0 8px; color:var(--muted); font-size:var(--text-xs); text-align:right; white-space:nowrap; }
+.calendar-hour>time,.day-calendar>div>section>time { padding-top:9px; }
+.calendar-hour,.calendar-hour>div,.day-calendar>div>section,.day-calendar>div>section>div { min-height:64px; }
+.calendar-hour:last-child>div,.day-calendar>div>section:last-child>div { border-bottom:0; }
+.calendar-event { min-height:0; gap:0; padding:6px 9px; border-left-width:3px; border-radius:10px; line-height:1.35; }
+.calendar-event+.calendar-event { margin-top:4px; }
+.calendar-event strong { width:100%; font-size:var(--text-xs); white-space:normal; }
+.calendar-event small { width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.day-calendar>header { padding:0 16px; }
+.day-calendar>div>section { grid-template-columns:84px 1fr; }
+.day-calendar .calendar-event { max-width:none; }
+.month-calendar { padding:0 0 2px; }
+.month-grid { border-top:1px solid var(--line); border-left:0; border-radius:0; background:transparent; box-shadow:none; }
+.month-grid>section:nth-child(7n) { border-right:0; }
+.month-grid>section:nth-last-child(-n+7) { border-bottom:0; }
+.month-grid>section small { color:var(--muted); font-size:var(--text-xs); }
+.calendar-task { display:block; min-height:24px; padding:4px 8px; overflow:hidden; border-left-width:3px; border-radius:8px; line-height:1.35; text-align:left; text-overflow:ellipsis; white-space:nowrap; }
+
+/* Tasks board: closed columns, and cards that lead with the task */
+.task-board { grid-template-columns:repeat(5,minmax(200px,1fr)); gap:10px; align-items:start; min-height:0; padding-bottom:4px; border:0; }
+.task-board>section,.task-board>section:first-child,.task-board>section:last-child,.task-board>section:hover,.task-board>section:has(article:active) { min-width:0; min-height:132px; display:flex; flex-direction:column; gap:8px; padding:12px; border:0; border-radius:18px; background:var(--bento-tile); box-shadow:none; }
+.task-board>section>header { min-height:0; padding:2px 4px 4px; color:var(--ink); font-size:var(--text-sm); font-weight:600; }
+.task-board>section>header b { min-width:24px; padding:1px 7px; border-radius:var(--radius-pill); background:var(--surface); color:var(--muted); font-size:var(--text-xs); text-align:center; }
+.task-board>section article { min-height:0; display:flex; flex-direction:column; gap:2px; margin:0; padding:12px; background:var(--surface); }
+.task-board article strong { margin:0; font-size:var(--text-sm); line-height:1.35; }
+.task-board article>span { margin:0; color:var(--muted); font-size:var(--text-xs); }
+.task-board article footer { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:8px; }
+.task-board article small.overdue { color:var(--negative); font-weight:600; }
+.task-board article footer>i { display:flex; flex:none; font-style:normal; }
+.task-board article footer .person-avatar { width:26px; height:26px; min-width:26px; flex:none; display:grid; place-items:center; padding:0; border-radius:50%; font-size:var(--text-xs); }
+.task-board-empty { margin:0; padding:20px 8px; border:1px dashed var(--line); border-radius:14px; color:var(--muted); font-size:var(--text-xs); text-align:center; }
+
+/* Notifications: one quiet list, with times you can scan */
+.notifications-popover { width:360px; display:flex; flex-direction:column; padding:8px; }
+.notifications-popover>strong { padding:8px 10px 6px; font-size:var(--text-md); }
+.notification-list { max-height:min(460px,calc(100vh - 150px)); overflow-y:auto; }
+.notification-list>p { margin:0; padding:12px 10px 4px; color:var(--muted); font-size:var(--text-xs); font-weight:600; }
+.notification-list>p.notification-empty { padding:14px 10px; font-weight:400; }
+.top-popover .notification-list button { position:relative; display:grid!important; grid-template-columns:minmax(0,1fr) auto; align-items:baseline!important; gap:1px 12px!important; min-height:0!important; padding:9px 10px!important; }
+.top-popover .notification-list button span { min-width:0; overflow:hidden; color:var(--ink); font-size:var(--text-sm); font-weight:600; text-overflow:ellipsis; white-space:nowrap; }
+.top-popover .notification-list button time { color:var(--muted); font-size:var(--text-xs); white-space:nowrap; }
+.top-popover .notification-list button time.overdue { color:var(--negative); font-weight:600; }
+.top-popover .notification-list button small { grid-column:1 / -1; font-size:var(--text-xs); line-height:1.4; }
+.top-popover .notification-list button.new { padding-left:22px!important; }
+.top-popover .notification-list button.new:before { content:''; position:absolute; top:15px; left:9px; width:7px; height:7px; border-radius:50%; background:var(--accent-ink); }
+.top-popover .notification-all { min-height:38px!important; flex-direction:row; align-items:center!important; justify-content:center; margin-top:6px; color:var(--ink); font-size:var(--text-sm); font-weight:600; background:var(--surface)!important; }
+@media(max-width:700px){
+  .notifications-popover { position:fixed; top:64px; right:12px; left:12px; width:auto; }
+  .notification-list { max-height:calc(100vh - 230px); }
+  .task-board { grid-template-columns:repeat(5,230px); }
+}

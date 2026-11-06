@@ -44,7 +44,12 @@ export function formatActivityTime(occurredAt?: string | null, fallback = '') {
 
 /** Just the time of an activity, for showing beside its date. A date with no time gives nothing. */
 export function formatTouchTime(occurredAt?: string | null) {
-  const wall = occurredAt?.match(/T(\d{2}):(\d{2})/);
+  return formatTimeOfDay(occurredAt?.match(/T(\d{2}:\d{2})/)?.[1]);
+}
+
+/** A stored time such as 17:45, following the person's 12 or 24-hour setting. */
+export function formatTimeOfDay(value?: string | null) {
+  const wall = value?.match(/^(\d{1,2}):(\d{2})/);
   if (!wall) return '';
   const time = new Date(Date.UTC(2000, 0, 1, Number(wall[1]), Number(wall[2])));
   return new Intl.DateTimeFormat('en-PH', { hour: 'numeric', minute: '2-digit', hour12: preferences.timeFormat === '12-hour', timeZone: 'UTC' }).format(time);
