@@ -109,6 +109,10 @@ Google returns only its most relevant matches per search, so Scout splits the ar
 
 `FINDER_AI_MAX_CANDIDATES` caps how many results per search get an AI assessment (20 by default). The rest keep their rule-based score.
 
+## Sample data
+
+For demos, `npm run demo` fills the local database with a sample team, leads, deals, tasks, activity and Finder searches. Dates are relative to today, so run it again on the day. `npm run demo:remove` takes it out and leaves real records alone. Both only touch the local development database.
+
 ## Database changes
 
 `lib/foundation-store.ts` applies schema changes automatically. When you change it, raise `SCHEMA_VERSION`, otherwise the change won't run. `db/migrations/` is a readable history of those changes.
