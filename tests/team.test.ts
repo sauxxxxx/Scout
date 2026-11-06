@@ -1,3 +1,4 @@
+import { defaultCustomization } from '@/lib/customization';
 import { describe, expect, it } from 'vitest';
 import { leadsToCsv } from '@/lib/lead-export';
 import { canChangeRole, canInviteMembers, defaultRolePermissions, permissionAllowed, resolveCapabilities } from '@/lib/permissions';
@@ -122,7 +123,7 @@ describe('workspace settings', () => {
   });
 
   it('rejects unsafe settings', () => {
-    const valid = { defaultRole: 'member', senderName: 'Scout', emailMessage: '', allowedDomains: ['example.com'], adminsCanInvite: true, rolePermissions: defaultRolePermissions };
+    const valid = { customization: defaultCustomization, defaultRole: 'member', senderName: 'Scout', emailMessage: '', allowedDomains: ['example.com'], adminsCanInvite: true, rolePermissions: defaultRolePermissions };
     expect(workspaceSettingsSchema.safeParse(valid).success).toBe(true);
     expect(workspaceSettingsSchema.safeParse({ ...valid, defaultRole: 'owner' }).success).toBe(false);
     expect(workspaceSettingsSchema.safeParse({ ...valid, senderName: 'x\r\nBcc: a@b.c' }).success).toBe(false);

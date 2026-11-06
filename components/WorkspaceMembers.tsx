@@ -27,10 +27,10 @@ const allCapabilities: CapabilitySet = { 'finder:run': true, 'records:delete': t
 const fallbackContext: MembersContext = { members: [], assignableMembers: [], currentRole: 'viewer', capabilities: allCapabilities, canInvite: false, loading: false, refresh: async () => {}, replaceMembers: () => {} };
 const Context = createContext<MembersContext>(fallbackContext);
 
-export function WorkspaceMembersProvider({ session, children, preferredOwner = 'Me' }: { session: Session; children: React.ReactNode; preferredOwner?: string }) {
+export function WorkspaceMembersProvider({ session, children, preferredOwner = 'Me', initialMembers }: { session: Session; children: React.ReactNode; preferredOwner?: string; initialMembers?: WorkspaceMember[] }) {
   const fallback = useMemo<WorkspaceMember>(() => ({ ...session.user, role: session.role, status: 'active', pending: false }), [session]);
-  const [members, setMembers] = useState<WorkspaceMember[]>([fallback]);
-  const [loading, setLoading] = useState(true);
+  const [members, setMembers] = useState<WorkspaceMember[]>(initialMembers?.length ? initialMembers : [fallback]);
+  const [loading, setLoading] = useState(!initialMembers?.length);
   const refresh = useCallback(async () => {
     try {
       const response = await fetch('/api/users');
@@ -38,7 +38,8 @@ export function WorkspaceMembersProvider({ session, children, preferredOwner = '
       if (response.ok && data.users) setMembers(data.users);
     } finally { setLoading(false); }
   }, []);
-  useEffect(() => { void refresh(); }, [refresh]);
+  const hasStartingMembers = !!initialMembers?.length;
+  useEffect(() => { if (!hasStartingMembers) void refresh(); }, [refresh, hasStartingMembers]);
   const assignableMembers = useMemo(() => members.filter(member => !member.pending && member.status !== 'disabled' && member.role !== 'viewer'), [members]);
   const currentMember = members.find(member => member.id === session.user.id) || fallback;
   const defaultOwner = ['owner', 'admin'].includes(session.role) ? assignableMembers.find(member => member.id === preferredOwner) || currentMember : currentMember;

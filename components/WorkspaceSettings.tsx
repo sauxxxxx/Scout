@@ -11,7 +11,7 @@ type Notify = (message: string) => void;
 type Loaded = { settings: WorkspaceSettings; customRoles: CustomRole[]; workspaceName?: string };
 type AuditEntry = { id: string; actor: string; action: string; target: string; detail: string; createdAt: string };
 
-function useWorkspaceConfig() {
+export function useWorkspaceConfig() {
   const [state, setState] = useState<Loaded | null>(null);
   const [error, setError] = useState('');
   useEffect(() => {
@@ -28,7 +28,7 @@ function useWorkspaceConfig() {
 
 const fieldMessage = (data: { fields?: Record<string, string[]> }) => Object.values(data.fields || {}).flat()[0];
 
-async function saveSettings(settings: WorkspaceSettings, workspaceName?: string) {
+export async function saveSettings(settings: WorkspaceSettings, workspaceName?: string) {
   const response = await fetch('/api/workspace/settings', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...settings, ...(workspaceName ? { workspaceName } : {}) }) });
   const data = await response.json() as { settings?: WorkspaceSettings; error?: string; fields?: Record<string, string[]> };
   return response.ok ? { settings: data.settings as WorkspaceSettings } : { error: fieldMessage(data) || data.error || 'Settings could not be saved.' };

@@ -1,7 +1,8 @@
+import { publicBranding } from '@/lib/customization';
 import { ensureFoundationSchema } from '@/lib/foundation-store';
 import { allowRequest, clientAddress, tooManyRequests } from '@/lib/rate-limit';
 import { maskEmail } from '@/lib/team';
-import { invitationSummary } from '@/lib/team-store';
+import { invitationSummary, loadWorkspaceSettings } from '@/lib/team-store';
 import { workspaceDb } from '@/lib/workspace-store';
 
 export const dynamic = 'force-dynamic';
@@ -22,5 +23,6 @@ export async function GET(request: Request) {
     inviterName: invite.inviter_name || 'Your team',
     roleLabel: invite.custom_role_name || invite.role,
     note: invite.status === 'pending' ? invite.note : '',
+    branding: publicBranding((await loadWorkspaceSettings(db, invite.workspace_id)).customization, invite.workspace_name),
   });
 }

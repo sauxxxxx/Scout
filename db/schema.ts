@@ -239,6 +239,16 @@ CREATE TABLE IF NOT EXISTS finder_results (
   FOREIGN KEY (search_id) REFERENCES finder_searches(id) ON DELETE CASCADE
 )`;
 
+export const createFinderSeenPlacesTable = `
+CREATE TABLE IF NOT EXISTS finder_seen_places (
+  workspace_id TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  provider_record_id TEXT NOT NULL,
+  first_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (workspace_id, provider, provider_record_id)
+)`;
+
 export const createFinderSearchesIndex = `
 CREATE INDEX IF NOT EXISTS idx_finder_searches_workspace_created
 ON finder_searches(workspace_id, created_at DESC)

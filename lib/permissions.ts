@@ -24,8 +24,8 @@ const requiredRole: Record<BaseRole, WorkspaceRole> = {
 const fullAccess: CapabilitySet = { 'finder:run': true, 'records:delete': true, 'records:export': true, 'records:view_all': true };
 
 export const defaultRolePermissions: RolePermissions = {
-  member: { ...fullAccess },
-  viewer: { 'finder:run': false, 'records:delete': false, 'records:export': false, 'records:view_all': true },
+  member: { ...fullAccess, 'records:view_all': false },
+  viewer: { 'finder:run': false, 'records:delete': false, 'records:export': false, 'records:view_all': false },
 };
 
 export function hasPermission(role: WorkspaceRole, permission: BaseRole) {

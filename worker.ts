@@ -133,7 +133,7 @@ const worker = {
   async queue(batch: MessageBatch<FinderJobMessage>, env: FinderEnv) {
     for (const message of batch.messages) {
       try {
-        await processFinderMessage(env.DB, message.body, finderRuntimeConfig(env));
+        await processFinderMessage(env.DB, message.body, finderRuntimeConfig(env), env.FINDER_QUEUE ? next => env.FINDER_QUEUE!.send(next) : undefined);
         message.ack();
       } catch (error) {
         if (message.attempts < 3) {

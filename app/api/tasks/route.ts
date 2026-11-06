@@ -5,7 +5,8 @@ import { taskInputSchema, validationError } from '@/lib/validation';
 import { anchorForZone, taskDueIso } from '@/lib/task-dates';
 import { recordAudit } from '@/lib/audit';
 import { notifyMember } from '@/lib/notifications';
-import { guardRecord, seesOnlyOwnRecords, visibleLeadIds } from '@/lib/record-scope';
+import { ownScope } from '@/lib/lead-query';
+import { guardRecord, seesOnlyOwnRecords } from '@/lib/record-scope';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,13 +30,12 @@ export async function GET(request: Request) {
     return row ? Response.json({ task: mapTask(row) }) : Response.json({ error: 'Task not found.' }, { status: 404 });
   }
   const { page, pageSize, offset } = pageParams(params);
-  const rows = await db.prepare("SELECT * FROM tasks WHERE workspace_id=? AND status='Completed' ORDER BY updated_at DESC LIMIT ? OFFSET ?").bind(session.workspace.id, pageSize, offset).all<Record<string, unknown>>();
-  const count = await db.prepare("SELECT COUNT(*) total FROM tasks WHERE workspace_id=? AND status='Completed'").bind(session.workspace.id).first<{ total: number }>();
-  let tasks = rows.results.map(mapTask);
-  if (seesOnlyOwnRecords(session)) {
-    const visible = await visibleLeadIds(db, session.workspace.id, session.user.name);
-    tasks = tasks.filter(task => task.owner === session.user.name || (task.leadId && visible.has(task.leadId)));
-  }
+  const own = seesOnlyOwnRecords(session) ? ownScope(session.workspace.id, session.user.name) : null;
+  const where = `workspace_id=? AND status='Completed'${own ? ` AND (lead_id IN (SELECT leads.id FROM leads WHERE leads.workspace_id=? AND ${own.sql}) OR (lead_id IS NULL AND owner=?))` : ''}`;
+  const values = own ? [session.workspace.id, session.workspace.id, ...own.values, session.user.name] : [session.workspace.id];
+  const rows = await db.prepare(`SELECT * FROM tasks WHERE ${where} ORDER BY updated_at DESC LIMIT ? OFFSET ?`).bind(...values, pageSize, offset).all<Record<string, unknown>>();
+  const count = await db.prepare(`SELECT COUNT(*) total FROM tasks WHERE ${where}`).bind(...values).first<{ total: number }>();
+  const tasks = rows.results.map(mapTask);
   return Response.json({ tasks, total: Number(count?.total || 0), page, pageSize });
 }
 
@@ -50,6 +50,7 @@ export async function POST(request: Request) {
   const blocked=await guardRecord(auth,'lead',linked.leadId);if(blocked)return blocked;
   await auth.db.prepare(`INSERT INTO tasks (uid,workspace_id,id,version,title,lead,lead_id,company_id,contact_id,opportunity_id,owner,priority,due,due_at,time,type,notes,status,reminder,recurrence,outcome,created_at,updated_at) VALUES (?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`)
     .bind(uid, auth.session.workspace.id, task.id, ...values(task,linked,auth.session.timezone)).run();
+  await auth.db.prepare("UPDATE tasks SET completed_at=CASE WHEN status='Completed' THEN COALESCE(completed_at,CURRENT_TIMESTAMP) ELSE NULL END WHERE uid=? AND workspace_id=?").bind(uid, auth.session.workspace.id).run();
   await notifyMember(auth, task.owner, 'leadAssignments', 'Task assigned to you', task.title, '?page=tasks');
   const row = await auth.db.prepare('SELECT * FROM tasks WHERE uid=? AND workspace_id=?').bind(uid, auth.session.workspace.id).first<Record<string, unknown>>();
   return Response.json({ task: mapTask(row!) }, { status: 201 });
@@ -69,6 +70,8 @@ export async function PATCH(request: Request) {
   const result = await auth.db.prepare(`UPDATE tasks SET ${taskColumns},version=version+1,updated_at=CURRENT_TIMESTAMP WHERE uid=? AND workspace_id=? AND version=?`)
     .bind(...values(task,linked,auth.session.timezone), task.uid, auth.session.workspace.id, task.version).run();
   if (!result.meta.changes) return Response.json({ error: 'This task changed elsewhere. Refresh and try again.', conflict: true }, { status: 409 });
+  // Reports need the day a task was finished, and editing it later must not move that day.
+  await auth.db.prepare("UPDATE tasks SET completed_at=CASE WHEN status='Completed' THEN COALESCE(completed_at,CURRENT_TIMESTAMP) ELSE NULL END WHERE uid=? AND workspace_id=?").bind(task.uid, auth.session.workspace.id).run();
   if (before && before.owner !== task.owner) await notifyMember(auth, task.owner, 'leadAssignments', 'Task assigned to you', task.title, '?page=tasks');
   const row = await auth.db.prepare('SELECT * FROM tasks WHERE uid=? AND workspace_id=?').bind(task.uid, auth.session.workspace.id).first<Record<string, unknown>>();
   return Response.json({ task: mapTask(row!) });

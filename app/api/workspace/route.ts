@@ -1,3 +1,4 @@
+import { GET as loadActivities } from '@/app/api/activities/route';
 import { authenticateRequest } from '@/lib/auth';
 import { leadColumns, leadJoins } from '@/lib/lead-query';
 import { mapLead, mapTask } from '@/lib/workspace-store';
@@ -7,6 +8,7 @@ import { scopeWorkspace, seesOnlyOwnRecords, visibleLeadIds } from '@/lib/record
 export const dynamic = 'force-dynamic';
 
 const RECENT_LEADS = 200;
+const RECENT_ACTIVITY = 100;
 const openWork = `(leads.id IN (SELECT lead_id FROM tasks WHERE workspace_id=?1 AND status!='Completed')
   OR leads.id IN (SELECT lead_id FROM opportunities WHERE workspace_id=?1 AND archived=0 AND stage NOT IN ('Won','Lost'))
   OR leads.id IN (SELECT id FROM leads WHERE workspace_id=?1 AND archived=0 ORDER BY updated_at DESC LIMIT ${RECENT_LEADS}))`;
@@ -40,8 +42,13 @@ export async function GET(request: Request) {
   const clock = await db.prepare("SELECT datetime('now','-5 seconds') now").first<{ now: string }>();
   const data = { leads: (leadRows.results as Record<string, unknown>[]).map(mapLead), tasks: (taskRows.results as Record<string, unknown>[]).map(mapTask), companies: (companyRows.results as Record<string, unknown>[]).map(mapCompany), contacts: (contactRows.results as Record<string, unknown>[]).map(mapContact), opportunities: (opportunityRows.results as Record<string, unknown>[]).map(mapOpportunity) };
   const serverTime = clock?.now;
-  if (!seesOnlyOwnRecords(session)) return Response.json({ ...data, serverTime });
-  return Response.json({ ...scopeWorkspace(data as never, session.user.name, await visibleLeadIds(db, workspaceId, session.user.name)), serverTime });
+  // The first load also brings recent activity, so opening Scout doesn't need a second request. The Activities page fetches more.
+  const recent = !since && new URL(request.url).searchParams.get('activity') === 'recent' ? await loadActivities(new Request(new URL(`/api/activities?all=1&limit=${RECENT_ACTIVITY}`, request.url), { headers: request.headers })).then(response => response.json() as Promise<{ activities?: unknown[] }>) : undefined;
+  if (!seesOnlyOwnRecords(session)) return Response.json({ ...data, activities: recent?.activities, serverTime });
+  const visible = await visibleLeadIds(db, workspaceId, session.user.name);
+  // A lead handed to someone else has to leave this rep's screen, not just stop updating.
+  const removedLeadIds = since ? data.leads.map(lead => String(lead.id)).filter(id => !visible.has(id)) : undefined;
+  return Response.json({ ...scopeWorkspace(data as never, session.user.name, visible), activities: recent?.activities, removedLeadIds, serverTime });
 }
 
 export async function PUT() {

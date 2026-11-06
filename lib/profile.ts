@@ -1,3 +1,4 @@
+import { FINDER_DEFAULT_LEADS, FINDER_MAX_LEADS } from '@/lib/finder-cells';
 import { z } from 'zod';
 
 export const pipelineViews = ['Board', 'Detailed', 'Table'] as const;
@@ -6,15 +7,21 @@ export const timezones = ['Asia/Manila', 'Asia/Singapore', 'UTC'] as const;
 export const languages = ['English (Philippines)', 'English (United States)'] as const;
 export const dateFormats = ['MMM d, yyyy', 'dd/MM/yyyy', 'MM/dd/yyyy'] as const;
 export const timeFormats = ['12-hour', '24-hour'] as const;
+export const themes = ['System', 'Light', 'Dark'] as const;
+export const fontSizes = ['Small', 'Default', 'Large', 'Extra large'] as const;
+export const densities = ['Comfortable', 'Compact'] as const;
 export const landingPages = ['Overview', 'Leads', 'Finder', 'Pipeline', 'Tasks', 'Activities'] as const;
 
 export const profileDefaults = {
   pipelineView: 'Board' as const,
   landingPage: 'Overview' as (typeof landingPages)[number],
+  theme: 'System' as (typeof themes)[number],
+  fontSize: 'Default' as (typeof fontSizes)[number],
+  density: 'Comfortable' as (typeof densities)[number],
   defaultOwner: 'Me',
   currency: 'PHP' as const,
   finderRadius: 10 as const,
-  finderLeadCount: 20 as const,
+  finderLeadCount: FINDER_DEFAULT_LEADS as number,
   cardProperties: { value: true, owner: true, closeDate: true, probability: true, priority: true, nextAction: false },
 };
 
@@ -27,10 +34,13 @@ export const notificationDefaults = {
 export const profilePreferencesSchema = z.object({
   pipelineView: z.enum(pipelineViews),
   landingPage: z.enum(landingPages).default('Overview'),
+  theme: z.enum(themes).default('System'),
+  fontSize: z.enum(fontSizes).default('Default'),
+  density: z.enum(densities).default('Comfortable'),
   defaultOwner: z.string().trim().min(1).max(120),
   currency: z.enum(currencies),
   finderRadius: z.union([z.literal(3), z.literal(5), z.literal(10), z.literal(15), z.literal(25), z.literal(50)]),
-  finderLeadCount: z.union([z.literal(10), z.literal(20), z.literal(40), z.literal(60)]),
+  finderLeadCount: z.number().int().min(1).max(FINDER_MAX_LEADS),
   cardProperties: z.object({
     value: z.boolean(), owner: z.boolean(), closeDate: z.boolean(), probability: z.boolean(), priority: z.boolean(), nextAction: z.boolean(),
   }).strict(),
@@ -54,6 +64,15 @@ export const profileUpdateSchema = z.object({
 }).strict();
 
 export type ProfileUpdate = z.infer<typeof profileUpdateSchema>;
+
+/** The stylesheet reads this attribute to scale every text size together. */
+export function applyFontSize(size: (typeof fontSizes)[number]) {
+  document.documentElement.dataset.fontSize = size;
+}
+
+export function applyDensity(density: (typeof densities)[number]) {
+  document.documentElement.dataset.density = density;
+}
 
 export function parseObject<T extends object>(value: unknown, fallback: T): T {
   if (typeof value !== 'string' || !value) return fallback;

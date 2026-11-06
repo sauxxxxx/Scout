@@ -42,6 +42,50 @@ export function formatActivityTime(occurredAt?: string | null, fallback = '') {
   return `${formatDate(day)}, ${new Intl.DateTimeFormat('en-PH', { hour: 'numeric', minute: '2-digit', hour12: preferences.timeFormat === '12-hour', timeZone: 'UTC' }).format(time)}`;
 }
 
+/** Stored times come in three shapes: a wall-clock activity time, a UTC database timestamp, and ISO. */
+export function parseStamp(value?: string | null) {
+  if (!value) return null;
+  const text = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(value) ? `${value.replace(' ', 'T')}Z` : value;
+  const date = new Date(text);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/** The current time as an activity stores it: the rep's own wall clock, to the minute. */
+export function localDateTime(now = new Date()) {
+  const shifted = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return shifted.toISOString().slice(0, 16);
+}
+
+const dayStart = (time: number) => { const date = new Date(time); date.setHours(0, 0, 0, 0); return date.getTime(); };
+
+/** Calendar days between then and now, so 11pm to 1am counts as a day. */
+export function daysSince(value?: string | null, now = Date.now()) {
+  const date = parseStamp(value);
+  return date ? Math.round((dayStart(now) - dayStart(date.getTime())) / 86400000) : null;
+}
+
+export function formatDaysAgo(value?: string | null, now = Date.now()) {
+  const days = daysSince(value, now);
+  if (days === null) return '';
+  if (days <= 0) return 'Today';
+  return days === 1 ? 'Yesterday' : `${days} days ago`;
+}
+
+/** Counts up for the first hour, then settles on the real time. Scheduled times in the future keep their full date. */
+export function formatRelativeTime(value?: string | null, fallback = '', now = Date.now()) {
+  const date = parseStamp(value);
+  if (!date) return fallback;
+  const elapsed = now - date.getTime();
+  if (elapsed < -60000) return formatActivityTime(value, fallback);
+  if (elapsed < 60000) return 'Just now';
+  if (elapsed < 3600000) return `${Math.floor(elapsed / 60000)} min ago`;
+  const days = daysSince(value, now);
+  const time = formatActivityTime(value, fallback).split(', ').pop();
+  if (days === 0) return `Today, ${time}`;
+  if (days === 1) return `Yesterday, ${time}`;
+  return formatActivityTime(value, fallback);
+}
+
 export function formatClock(date: Date) {
   return new Intl.DateTimeFormat('en-PH', { hour: 'numeric', minute: '2-digit', hour12: preferences.timeFormat === '12-hour' }).format(date);
 }

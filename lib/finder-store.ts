@@ -1,3 +1,4 @@
+import { finderCandidateTarget, finderRequestLimit, finishCell, growBox, isRootCell, readSearchState, restrictToBox } from '@/lib/finder-cells';
 import { calibrateAssessment, createGeminiProvider, finderAiInputHash, geminiCostMicroUsd, parseAssessment, type FinderAiAssessment, type FinderAiInput, type FinderAiStatus } from '@/lib/finder-ai';
 
 import { areaFromBounds, distanceKm, isWithinArea, parseFinderArea, parseFinderBounds, placesSearchArea, type FinderArea, type FinderBounds } from '@/lib/finder-map';
@@ -41,6 +42,9 @@ export type FinderSearchRecord = {
   importedCount: number;
   saved: boolean;
   retryCount: number;
+  hiddenFoundCount: number;
+  coverage?: 'target' | 'limit' | 'complete';
+  includeFound: boolean;
   error?: string;
   startedAt?: string;
   completedAt?: string;
@@ -153,6 +157,7 @@ export function mapFinderSearch(row: Record<string, unknown>): FinderSearchRecor
     requirementMode: row.requirement_mode === 'any' ? 'any' : 'all', salesFocus: ['Website & booking', 'Digital marketing', 'General outreach'].includes(String(row.sales_focus)) ? String(row.sales_focus) as SalesFocus : 'Website & booking',
     status: String(row.status) as FinderStatus, progress: Number(row.progress), stage: String(row.stage), foundCount: Number(row.found_count),
     importedCount: Number(row.imported_count), saved: Boolean(row.saved), retryCount: Number(row.retry_count),
+    hiddenFoundCount: Number(row.hidden_found_count || 0), coverage: row.coverage ? row.coverage as FinderSearchRecord['coverage'] : undefined, includeFound: Boolean(row.include_found),
     error: row.error ? String(row.error) : undefined, startedAt: row.started_at ? String(row.started_at) : undefined,
     completedAt: row.completed_at ? String(row.completed_at) : undefined, createdAt: String(row.created_at), updatedAt: String(row.updated_at),
   };
@@ -370,34 +375,62 @@ async function processFinderAiSearch(db: D1Database, workspaceId: string, search
   }
 }
 
-export async function processFinderJob(db: D1Database, workspaceId: string, searchId: string, configOrKey: FinderRuntimeConfig | string = {}) {
+const REQUESTS_PER_RUN = 6;
+const FOUND_MEMORY_DAYS = 90;
+
+/** Businesses this workspace has already been shown, and any already saved as leads. */
+async function foundPlaceIds(db: D1Database, workspaceId: string) {
+  const rows = await db.prepare(`SELECT provider_record_id id FROM finder_seen_places WHERE workspace_id=?1 AND provider='Google Places' AND last_seen_at>=datetime('now','-${FOUND_MEMORY_DAYS} days')
+    UNION SELECT finder_record_id FROM leads WHERE workspace_id=?1 AND finder_provider='Google Places' AND finder_record_id IS NOT NULL`).bind(workspaceId).all<{ id: string }>();
+  return new Set(rows.results.map(row => row.id));
+}
+
+/** Kept apart from results so that deleting a search doesn't bring its businesses back. Only what a rep was shown counts. */
+async function rememberFoundPlaces(db: D1Database, workspaceId: string, searchId: string) {
+  await db.prepare(`INSERT INTO finder_seen_places (workspace_id,provider,provider_record_id) SELECT workspace_id,provider,provider_record_id FROM finder_results WHERE workspace_id=? AND search_id=? AND provider='Google Places'
+    ON CONFLICT(workspace_id,provider,provider_record_id) DO UPDATE SET last_seen_at=CURRENT_TIMESTAMP`).bind(workspaceId, searchId).run();
+}
+
+export async function processFinderJob(db: D1Database, workspaceId: string, searchId: string, configOrKey: FinderRuntimeConfig | string = {}, requeue?: (next: FinderJobMessage) => Promise<unknown>) {
   const config: FinderRuntimeConfig = typeof configOrKey === 'string' ? { googlePlacesApiKey: configOrKey } : configOrKey;
   const jobRow = await db.prepare('SELECT * FROM finder_searches WHERE id=? AND workspace_id=?').bind(searchId, workspaceId).first<Record<string, unknown>>();
   if (!jobRow || String(jobRow.status) !== 'Queued') return;
   const job = mapFinderSearch(jobRow);
-  const candidateTarget = Math.min(60, Math.max(20, job.targetCount * 2));
+  const candidateTarget = finderCandidateTarget(job.targetCount);
+  const requestLimit = finderRequestLimit(job.targetCount);
   const searchArea = job.area || areaFromBounds(job.bounds);
-  const claim = await db.prepare("UPDATE finder_searches SET status='Running',progress=8,stage='Searching businesses',error=NULL,started_at=COALESCE(started_at,CURRENT_TIMESTAMP),updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND status='Queued'").bind(searchId, workspaceId).run();
+  const claim = await db.prepare("UPDATE finder_searches SET status='Running',progress=MAX(progress,8),stage='Searching businesses',error=NULL,started_at=COALESCE(started_at,CURRENT_TIMESTAMP),updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND status='Queued'").bind(searchId, workspaceId).run();
   if (!claim.meta.changes) return;
   if (!config.googlePlacesApiKey) {
     await db.prepare("UPDATE finder_searches SET status='Failed',stage='Connection required',error='Google Places API key is not configured.',updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?").bind(searchId, workspaceId).run();
     return;
   }
   const requestedFields = ['places.location', 'places.internationalPhoneNumber', 'places.nationalPhoneNumber', 'places.websiteUri', 'places.id', 'places.displayName', 'places.formattedAddress', 'places.addressComponents', 'places.googleMapsUri', 'places.primaryTypeDisplayName', 'places.businessStatus', 'places.rating', 'places.userRatingCount', 'nextPageToken'];
-  let pageToken: string | undefined;
-  let accepted = 0;
-  let page = 0;
+  const state = readSearchState(jobRow.search_state_json);
+  const requestsAtStart = state.requests;
+  const found = job.includeFound ? new Set<string>() : await foundPlaceIds(db, workspaceId);
+  const hidden = new Set(state.hidden);
+  const counted = await db.prepare('SELECT COUNT(*) total FROM finder_results WHERE search_id=? AND workspace_id=?').bind(searchId, workspaceId).first<{ total: number }>();
+  let accepted = Number(counted?.total || 0);
   try {
-    do {
+    while (state.cells.length && accepted < candidateTarget && state.requests < requestLimit) {
       const current = await db.prepare('SELECT status FROM finder_searches WHERE id=? AND workspace_id=?').bind(searchId, workspaceId).first<{ status: string }>();
       if (current?.status === 'Cancelled') return;
+      // Long searches continue in a fresh run, so one job can't hit the platform's limit on outgoing requests.
+      if (requeue && state.requests - requestsAtStart >= REQUESTS_PER_RUN) {
+        state.hidden = [...hidden];
+        await db.prepare("UPDATE finder_searches SET status='Queued',search_state_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND status='Running'").bind(JSON.stringify(state), searchId, workspaceId).run();
+        await requeue({ kind: 'search', workspaceId, searchId });
+        return;
+      }
+      const cell = state.cells[0];
       const includedType = validGooglePlaceType(job.industryType);
       const requestBody: Record<string, unknown> = {
         textQuery: searchArea ? job.industry : `${job.industry} in ${job.location}`,
-        ...placesSearchArea(searchArea),
+        ...(isRootCell(cell) ? placesSearchArea(searchArea) : restrictToBox(cell)),
         ...(includedType ? { includedType, strictTypeFiltering: true } : {}),
         pageSize: 20,
-        ...(pageToken ? { pageToken } : {}),
+        ...(state.pageToken ? { pageToken: state.pageToken } : {}),
       };
       const requestPlaces = async () => {
         const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
@@ -418,8 +451,13 @@ export async function processFinderJob(db: D1Database, workspaceId: string, sear
         throw new Error(finderPlacesErrorMessage(response.status));
       }
       const places = data.places || [];
+      state.requests += 1;
+      state.cellPlaces = (state.cellPlaces || 0) + places.length;
+      growBox(state, places.map(place => ({ latitude: place.location?.latitude, longitude: place.location?.longitude })));
+      for (const place of places) if (place.id && found.has(place.id)) hidden.add(place.id);
+      const newPlaces = places.filter(place => !place.id || !found.has(place.id));
       const shouldInspectWebsites = job.requirements.some(item => ['Email', 'Social', 'Facebook'].includes(item));
-      const enriched = await Promise.all(places.map(async place => {
+      const enriched = await Promise.all(newPlaces.map(async place => {
         const directFacebook = facebookUrl(place.websiteUri || '');
         const evidence = directFacebook ? { email: '', socialUrl: directFacebook, summary: '' }
           : shouldInspectWebsites || Boolean(place.websiteUri) ? await websiteEvidence(place.websiteUri || '') : { email: '', socialUrl: '', summary: '' };
@@ -462,11 +500,13 @@ export async function processFinderJob(db: D1Database, workspaceId: string, sear
       }
       const total = await db.prepare('SELECT COUNT(*) total FROM finder_results WHERE search_id=? AND workspace_id=?').bind(searchId, workspaceId).first<{ total: number }>();
       accepted = Number(total?.total || 0);
-      page += 1;
-      const progress = Math.min(92, 20 + page * 24);
-      await db.prepare("UPDATE finder_searches SET found_count=?,progress=MAX(progress,?),stage='Verifying contact info',updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?").bind(accepted, progress, searchId, workspaceId).run();
-      pageToken = data.nextPageToken;
-    } while (pageToken && accepted < candidateTarget && page < 3);
+      state.pageToken = data.nextPageToken;
+      if (!state.pageToken) finishCell(state, searchArea);
+      state.hidden = [...hidden];
+      const progress = Math.min(92, 20 + Math.round(accepted / candidateTarget * 70));
+      await db.prepare("UPDATE finder_searches SET found_count=?,progress=MAX(progress,?),stage='Verifying contact info',search_state_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?").bind(accepted, progress, JSON.stringify(state), searchId, workspaceId).run();
+    }
+    const coverage = accepted >= candidateTarget ? 'target' : state.cells.length ? 'limit' : 'complete';
     await processFinderAiSearch(db, workspaceId, searchId, config);
     const finalRows = await db.prepare('SELECT * FROM finder_results WHERE search_id=? AND workspace_id=?').bind(searchId, workspaceId).all<Record<string, unknown>>();
     const ranked = finalRows.results.map(mapFinderResult).sort((a, b) => {
@@ -477,19 +517,21 @@ export async function processFinderJob(db: D1Database, workspaceId: string, sear
     const remove = ranked.slice(job.targetCount).filter(result => !result.importedLeadId && result.provider === 'Google Places' && !result.facebookVerifiedAt);
     if (remove.length) await db.batch(remove.map(result => db.prepare('DELETE FROM finder_results WHERE id=? AND workspace_id=? AND imported_lead_id IS NULL').bind(result.id, workspaceId)));
     accepted = ranked.length - remove.length;
-    await db.prepare("UPDATE finder_searches SET status='Complete',progress=100,stage='Complete',found_count=?,completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND status='Running'").bind(accepted, searchId, workspaceId).run();
+    await rememberFoundPlaces(db, workspaceId, searchId);
+    await db.prepare("UPDATE finder_searches SET status='Complete',progress=100,stage='Complete',found_count=?,hidden_found_count=?,coverage=?,search_state_json=NULL,completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND status='Running'").bind(accepted, hidden.size, coverage, searchId, workspaceId).run();
   } catch (error) {
     const total = await db.prepare('SELECT COUNT(*) total FROM finder_results WHERE search_id=? AND workspace_id=?').bind(searchId, workspaceId).first<{ total: number }>();
-    const found = Number(total?.total || 0);
+    const partial = Number(total?.total || 0);
+    await rememberFoundPlaces(db, workspaceId, searchId);
     const message = error instanceof Error && /^(Business search|The business)/.test(error.message)
       ? error.message : finderPlacesErrorMessage(500);
     await db.prepare("UPDATE finder_searches SET status=?,progress=?,stage=?,found_count=?,retry_count=retry_count+1,error=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?")
-      .bind(found ? 'Partial' : 'Failed', found ? 100 : 0, found ? 'Partial results available' : 'Search failed', found, message, searchId, workspaceId).run();
+      .bind(partial ? 'Partial' : 'Failed', partial ? 100 : 0, partial ? 'Partial results available' : 'Search failed', partial, message, searchId, workspaceId).run();
   }
 }
 
-export async function processFinderMessage(db: D1Database, message: FinderJobMessage, config: FinderRuntimeConfig) {
-  if (message.kind === 'search') return processFinderJob(db, message.workspaceId, message.searchId, config);
+export async function processFinderMessage(db: D1Database, message: FinderJobMessage, config: FinderRuntimeConfig, requeue?: (next: FinderJobMessage) => Promise<unknown>) {
+  if (message.kind === 'search') return processFinderJob(db, message.workspaceId, message.searchId, config, requeue);
   return processFinderAiResult(db, message.workspaceId, message.searchId, message.resultId, config);
 }
 

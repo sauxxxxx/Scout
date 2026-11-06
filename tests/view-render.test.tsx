@@ -5,6 +5,7 @@ import { Activities } from '../components/crm/Activities';
 import { Leads } from '../components/crm/Leads';
 import { PipelineWorkspace } from '../components/crm/Pipeline';
 import { Settings } from '../components/crm/Settings';
+import { PageSkeleton, ScoutLogo } from '../components/crm/shared';
 import { Tasks } from '../components/crm/Tasks';
 import { FinderWorkspace } from '../components/FinderWorkspace';
 
@@ -34,6 +35,23 @@ describe('primary workspace views', () => {
     const markup = renderToString(createElement(Leads as never, props as never));
     expect(markup).toContain('<strong>—</strong>');
     expect(markup).not.toMatch(/>(Low|Medium|High)<\/small>/);
+  });
+  it('shows the score with its priority and never a rank', () => {
+    const props = { leads: [lead], setLeads: noop, activities: [], setActivities: noop, setTasks: noop, leadView: 'Leads', notify: noop, focusedLead: null, setFocusedLead: noop, companies: [company], contacts: [contact], opportunities: [opportunity], onSaveCompany: asyncNoop, onCreateContact: asyncNoop, onSaveContact: asyncNoop, onDeleteContact: asyncNoop, onCreateOpportunity: asyncNoop, onSaveOpportunity: asyncNoop };
+    const markup = renderToString(createElement(Leads as never, props as never));
+    expect(markup).toContain('<strong>91</strong>');
+    expect(markup).toContain('priority-badge high');
+    expect(markup).not.toMatch(/#d+/);
+  });
+  it('announces the loading state to screen readers', () => {
+    const markup = renderToString(createElement(PageSkeleton));
+    expect(markup).toContain('role="status"');
+    expect(markup).toContain('aria-label="Loading"');
+  });
+  it('ships a logo for light and dark themes', () => {
+    const markup = renderToString(createElement(ScoutLogo));
+    expect(markup).toContain('/scout-logo.svg');
+    expect(markup).toContain('/scout-logo-dark.svg');
   });
   it('starts Finder without repeating the form back to the user', () => {
     const markup = renderToString(createElement(FinderWorkspace, { notify: noop, leads: [], onImportedLeads: noop, setPage: noop, finderView: 'New search', setFinderView: noop }));

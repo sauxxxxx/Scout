@@ -1,13 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { FiPlus, FiX } from 'react-icons/fi';
+import { FiX } from 'react-icons/fi';
 import { ScoutSelect } from '@/components/ScoutSelect';
 
 type Workspace = { id: string; name: string };
 
-export function WorkspaceSwitcher({ current, workspaces }: { current: Workspace; workspaces: Workspace[] }) {
-  const [creating, setCreating] = useState(false);
+export function WorkspaceSwitcher({ current, workspaces, creating, onCloseCreate }: { current: Workspace; workspaces: Workspace[]; creating: boolean; onCloseCreate: () => void }) {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -26,21 +25,22 @@ export function WorkspaceSwitcher({ current, workspaces }: { current: Workspace;
     setBusy(false); setError(data.error || 'The workspace could not be created.');
   };
 
-  return <div className="workspace-name">
+  return <>
+    <div className="workspace-name">
     {workspaces.length > 1
       ? <ScoutSelect ariaLabel="Switch workspace" value={current.id} options={workspaces.map(item => ({ value: item.id, label: item.name }))} onChange={choose} />
       : <span>{current.name}</span>}
-    <button className="workspace-add" aria-label="Create a workspace" title="Create a workspace" onClick={() => setCreating(true)}><FiPlus /></button>
-    {creating && <div className="modal-backdrop" onClick={() => setCreating(false)}>
+    </div>
+    {creating && <div className="modal-backdrop" onClick={() => onCloseCreate()}>
       <div className="modal team-dialog" role="dialog" aria-modal="true" aria-label="Create a workspace" onClick={event => event.stopPropagation()}>
-        <header><h2>Create a workspace</h2><button onClick={() => setCreating(false)} aria-label="Close"><FiX /></button></header>
+        <header><h2>Create a workspace</h2><button onClick={() => onCloseCreate()} aria-label="Close"><FiX /></button></header>
         <div className="team-dialog-body">
           <p>A separate space with its own leads, team and settings. You&apos;ll be its owner.</p>
           <label className="team-field">Workspace name<input autoFocus maxLength={80} value={name} onChange={event => setName(event.target.value)} /></label>
           {error && <p className="team-field-error" role="alert">{error}</p>}
         </div>
-        <footer><button className="text-link" onClick={() => setCreating(false)}>Cancel</button><button className="primary" disabled={busy || name.trim().length < 2} onClick={create}>{busy ? 'Creating…' : 'Create workspace'}</button></footer>
+        <footer><button className="text-link" onClick={() => onCloseCreate()}>Cancel</button><button className="primary" disabled={busy || name.trim().length < 2} onClick={create}>{busy ? 'Creating…' : 'Create workspace'}</button></footer>
       </div>
     </div>}
-  </div>;
+  </>;
 }

@@ -1,5 +1,5 @@
 import { env, waitUntil } from 'cloudflare:workers';
-import { authenticateRequest } from '@/lib/auth';
+import { authenticateRequest, type ScoutSession } from '@/lib/auth';
 import { mapFinderResult, mapFinderSearch, processFinderMessage, type FinderJobMessage } from '@/lib/finder-store';
 import { finderRuntimeConfig, type FinderEnv } from '@/lib/finder-runtime';
 import { publicFinderResult } from '@/lib/finder-public';
@@ -18,6 +18,8 @@ export const dynamic = 'force-dynamic';
 const runtimeEnv = () => env as unknown as FinderEnv;
 const runtimeConfig = () => finderRuntimeConfig(runtimeEnv());
 
+const ownName = (session: ScoutSession) => (seesOnlyOwnRecords(session) ? session.user.name : undefined);
+
 async function dispatchFinderJob(db: D1Database, message: FinderJobMessage) {
   const queue = runtimeEnv().FINDER_QUEUE;
   if (queue) {
@@ -26,7 +28,7 @@ async function dispatchFinderJob(db: D1Database, message: FinderJobMessage) {
   waitUntil(processFinderMessage(db, message, runtimeConfig()));
 }
 
-async function finderPayload(db: D1Database, workspaceId: string, id: string) {
+async function finderPayload(db: D1Database, workspaceId: string, id: string, ownOnly?: string) {
   const [searchRow, resultRows] = await db.batch([
     db.prepare('SELECT * FROM finder_searches WHERE id=? AND workspace_id=?').bind(id, workspaceId),
     db.prepare('SELECT * FROM finder_results WHERE search_id=? AND workspace_id=? ORDER BY score DESC,name').bind(id, workspaceId),
@@ -34,7 +36,7 @@ async function finderPayload(db: D1Database, workspaceId: string, id: string) {
   const row = searchRow.results[0] as Record<string, unknown> | undefined;
   if (!row) return null;
   const existing = await existingFinderLeads(db, workspaceId);
-  const updatedLeads = await db.prepare('SELECT l.* FROM leads l WHERE l.workspace_id=? AND l.id IN (SELECT imported_lead_id FROM finder_results WHERE search_id=? AND workspace_id=?)').bind(workspaceId,id,workspaceId).all<Record<string,unknown>>();
+  const updatedLeads = await db.prepare(`SELECT l.* FROM leads l WHERE l.workspace_id=? AND l.id IN (SELECT imported_lead_id FROM finder_results WHERE search_id=? AND workspace_id=?)${ownOnly ? ' AND l.owner=?' : ''}`).bind(...(ownOnly ? [workspaceId, id, workspaceId, ownOnly] : [workspaceId, id, workspaceId])).all<Record<string,unknown>>();
   return { updatedLeads: updatedLeads.results.map(mapLead), search: mapFinderSearch(row), results: (resultRows.results as Record<string, unknown>[]).map(item => { const prospect = mapFinderResult(item); return { ...publicFinderResult(prospect), opportunity: salesOpportunity(prospect,mapFinderSearch(row).salesFocus), importedLeadId: prospect.importedLeadId || findDuplicate(prospect, existing)?.id, possibleDuplicates: possibleDuplicates(prospect, existing).map(lead => ({ id: lead.id, name: lead.name, city: lead.city, address: lead.address })) }; }) };
 }
 
@@ -49,7 +51,7 @@ export async function GET(request: Request) {
       auth.db.prepare("UPDATE finder_results SET ai_status='failed',ai_error='AI assessment was interrupted and can be retried.',updated_at=CURRENT_TIMESTAMP WHERE search_id=? AND workspace_id=? AND ai_status='running' AND updated_at < datetime('now','-2 minutes')").bind(id, auth.session.workspace.id),
       auth.db.prepare("UPDATE finder_ai_usage SET status='failed',reserved_microusd=0,updated_at=CURRENT_TIMESTAMP WHERE search_id=? AND workspace_id=? AND status='reserved' AND updated_at < datetime('now','-2 minutes')").bind(id, auth.session.workspace.id),
     ]);
-    const payload = await finderPayload(auth.db, auth.session.workspace.id, id);
+    const payload = await finderPayload(auth.db, auth.session.workspace.id, id, ownName(auth.session));
     if (!payload) return Response.json({ error: 'Finder search not found.' }, { status: 404 });
     if (payload.search.status === 'Running' && Date.now() - new Date(payload.search.updatedAt.replace(' ', 'T') + 'Z').getTime() > 90_000) {
       await auth.db.prepare("UPDATE finder_searches SET status='Queued',stage='Resuming',updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND status='Running'").bind(id, auth.session.workspace.id).run();
@@ -87,7 +89,7 @@ export async function POST(request: Request) {
     const result = await auth.db.prepare("UPDATE finder_results SET ai_status='pending',ai_error=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=? AND search_id=? AND workspace_id=? AND ai_status='failed'").bind(retry.data.resultId, retry.data.searchId, auth.session.workspace.id).run();
     if (!result.meta.changes) return Response.json({ error: 'Only failed AI assessments can be retried.' }, { status: 409 });
     await dispatchFinderJob(auth.db, { kind: 'ai', workspaceId: auth.session.workspace.id, searchId: retry.data.searchId, resultId: retry.data.resultId });
-    return Response.json(await finderPayload(auth.db, auth.session.workspace.id, retry.data.searchId), { status: 202 });
+    return Response.json(await finderPayload(auth.db, auth.session.workspace.id, retry.data.searchId, ownName(auth.session)), { status: 202 });
   }
   if ((body as { action?: string })?.action === 'facebook') {
     const parsed = finderFacebookSchema.safeParse(body); if (!parsed.success) return validationError(parsed.error);
@@ -95,7 +97,7 @@ export async function POST(request: Request) {
     if ('error' in result) return Response.json(result, { status: result.status });
     await dispatchFinderJob(auth.db, { kind: 'ai', workspaceId: auth.session.workspace.id, searchId: parsed.data.searchId, resultId: parsed.data.resultId });
     const lead = await auth.db.prepare('SELECT l.* FROM leads l JOIN finder_results r ON r.imported_lead_id=l.id WHERE r.id=? AND r.workspace_id=? AND l.workspace_id=?').bind(parsed.data.resultId, auth.session.workspace.id, auth.session.workspace.id).first<Record<string, unknown>>();
-    return Response.json({ ...await finderPayload(auth.db, auth.session.workspace.id, parsed.data.searchId), updatedLeads: lead ? [mapLead(lead)] : [] });
+    return Response.json({ ...await finderPayload(auth.db, auth.session.workspace.id, parsed.data.searchId, ownName(auth.session)), updatedLeads: lead ? [mapLead(lead)] : [] });
   }
   if ((body as { action?: string })?.action === 'add-prospect') {
     const parsed = finderManualProspectSchema.safeParse(body); if (!parsed.success) return validationError(parsed.error);
@@ -112,7 +114,7 @@ export async function POST(request: Request) {
     await auth.db.prepare(`INSERT INTO finder_results (id,workspace_id,search_id,provider,provider_record_id,name,industry,address,city,phone,email,website,social_url,source_url,score,score_reason,rule_score,rule_score_reason,opportunity,provenance_json,fetched_at,verified_at,facebook_status,ai_status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'possible','pending')`).bind(id, auth.session.workspace.id, search.id, 'Sales review', identity, value.name, search.industry, value.address, value.city, value.phone, value.email, value.website, facebook, facebook, assessment.score, assessment.scoreReason, assessment.score, assessment.scoreReason, assessment.opportunity, JSON.stringify(provenance), now, now).run();
     await auth.db.prepare('UPDATE finder_searches SET found_count=(SELECT COUNT(*) FROM finder_results WHERE search_id=? AND workspace_id=?),updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?').bind(search.id, auth.session.workspace.id, search.id, auth.session.workspace.id).run();
     await dispatchFinderJob(auth.db, { kind: 'ai', workspaceId: auth.session.workspace.id, searchId: search.id, resultId: id });
-    return Response.json({ ...await finderPayload(auth.db, auth.session.workspace.id, search.id), addedResultId: id }, { status: 201 });
+    return Response.json({ ...await finderPayload(auth.db, auth.session.workspace.id, search.id, ownName(auth.session)), addedResultId: id }, { status: 201 });
   }
   if (action === 'run' && !await allowRequest(auth.db, `finder:${auth.session.user.id}`, 30, 3600)) return tooManyRequests(600);
   const parsed = finderSearchSchema.safeParse(body);
@@ -124,7 +126,7 @@ export async function POST(request: Request) {
     if (!existing) return Response.json({ error: 'Finder search not found.' }, { status: 404 });
     await auth.db.batch([
       auth.db.prepare("UPDATE finder_results SET ai_status=CASE WHEN imported_lead_id IS NULL THEN 'pending' ELSE ai_status END,ai_error=NULL,ai_input_hash=CASE WHEN imported_lead_id IS NULL THEN NULL ELSE ai_input_hash END,updated_at=CURRENT_TIMESTAMP WHERE search_id=? AND workspace_id=?").bind(id, auth.session.workspace.id),
-      auth.db.prepare("UPDATE finder_searches SET status='Queued',progress=2,stage='Queued',error=NULL,started_at=NULL,completed_at=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?").bind(id, auth.session.workspace.id),
+      auth.db.prepare("UPDATE finder_searches SET status='Queued',progress=2,stage='Queued',error=NULL,started_at=NULL,completed_at=NULL,search_state_json=NULL,coverage=NULL,hidden_found_count=0,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?").bind(id, auth.session.workspace.id),
     ]);
   } else {
     id = crypto.randomUUID();
@@ -133,7 +135,8 @@ export async function POST(request: Request) {
     await auth.db.prepare(`INSERT INTO finder_searches (id,workspace_id,created_by,name,industry,industry_type,industry_psic_code,location,location_code,location_type,location_province,location_region,target_count,requirements_json,status,progress,stage,saved,map_area_json,map_bounds_json,sales_focus,requirement_mode)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(id, auth.session.workspace.id, auth.session.user.id, name, input.industry, input.industryType || null, input.industryPsicCode || null, input.location, input.locationCode || null, input.locationType || null, input.locationProvince || null, input.locationRegion || null, input.targetCount, JSON.stringify((input.requirements || []).map(item => item === 'Social' ? 'Facebook' : item)), status, status === 'Queued' ? 2 : 0, status === 'Queued' ? 'Queued' : 'Ready', input.action === 'save' ? 1 : 0, input.area ? JSON.stringify(input.area) : null, input.bounds ? JSON.stringify(input.bounds) : null, input.salesFocus, input.requirementMode).run();
   }
-  const payload = await finderPayload(auth.db, auth.session.workspace.id, id);
+  if (input.includeFound) await auth.db.prepare('UPDATE finder_searches SET include_found=1 WHERE id=? AND workspace_id=?').bind(id, auth.session.workspace.id).run();
+  const payload = await finderPayload(auth.db, auth.session.workspace.id, id, ownName(auth.session));
   if (input.action === 'run') await dispatchFinderJob(auth.db, { kind: 'search', workspaceId: auth.session.workspace.id, searchId: id });
   return Response.json(payload, { status: input.action === 'run' ? 202 : 201 });
 }
@@ -158,7 +161,7 @@ export async function PATCH(request: Request) {
     result = await auth.db.prepare('UPDATE finder_searches SET saved=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?').bind(body.action === 'save' ? 1 : 0, body.id, auth.session.workspace.id).run();
   }
   if (!result.meta.changes) return Response.json({ error: 'Finder search not found.' }, { status: 404 });
-  return Response.json(await finderPayload(auth.db, auth.session.workspace.id, body.id));
+  return Response.json(await finderPayload(auth.db, auth.session.workspace.id, body.id, ownName(auth.session)));
 }
 
 export async function DELETE(request: Request) {

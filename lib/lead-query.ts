@@ -1,7 +1,7 @@
 export const leadColumns = 'leads.*,companies.name company_name,companies.industry company_industry,companies.city company_city,companies.phone company_phone,companies.email company_email,contacts.name primary_contact_name,contacts.phone primary_contact_phone,contacts.email primary_contact_email';
 export const leadJoins = 'FROM leads LEFT JOIN companies ON companies.id=leads.company_id LEFT JOIN contacts ON contacts.id=leads.primary_contact_id';
 
-const sortColumns: Record<string, string> = { name: 'COALESCE(companies.name,leads.name)', status: 'leads.status', score: 'leads.score', owner: 'leads.owner', next: 'leads.next' };
+const sortColumns: Record<string, string> = { name: 'COALESCE(companies.name,leads.name)', status: 'leads.status', score: 'leads.score', owner: 'leads.owner', next: 'leads.next', lastTouch: 'leads.last_touch_at', recent: 'COALESCE(leads.changed_at,leads.updated_at)' };
 
 export function pageParams(params: URLSearchParams, defaultSize = 100, maximum = 200) {
   const page = Math.max(1, Number(params.get('page')) || 1);
@@ -9,11 +9,14 @@ export function pageParams(params: URLSearchParams, defaultSize = 100, maximum =
   return { page, pageSize, offset: (page - 1) * pageSize };
 }
 
-/** The leads a person may see at all. Written as SQL because a large id list would exceed D1's limit on bound values. */
+/**
+ * The leads a person may see at all: their own, plus any lead where they hold an open task, because they can't do the
+ * task without it. Written as SQL because a large id list would exceed D1's limit on bound values.
+ */
 export function ownScope(workspaceId: string, owner: string) {
   return {
-    sql: `(leads.owner=? OR leads.id IN (SELECT lead_id FROM tasks WHERE workspace_id=? AND owner=? AND lead_id IS NOT NULL) OR leads.id IN (SELECT lead_id FROM opportunities WHERE workspace_id=? AND owner=? AND lead_id IS NOT NULL) OR leads.id IN (SELECT lead_id FROM activities WHERE workspace_id=? AND owner=? AND lead_id IS NOT NULL))`,
-    values: [owner, workspaceId, owner, workspaceId, owner, workspaceId, owner],
+    sql: "(leads.owner=? OR leads.id IN (SELECT lead_id FROM tasks WHERE workspace_id=? AND owner=? AND status!='Completed' AND lead_id IS NOT NULL))",
+    values: [owner, workspaceId, owner],
   };
 }
 
@@ -30,6 +33,13 @@ export function buildLeadFilter(params: URLSearchParams, workspaceId: string, cu
     const value = params.get(key);
     if (value && value !== empty) { clauses.push(`${column}=?`); values.push(value); }
   }
+  const touchFrom = params.get('touchFrom');
+  const touchTo = params.get('touchTo');
+  const touchBefore = params.get('touchBefore');
+  if (params.get('touchNever')) clauses.push('leads.last_touch_at IS NULL');
+  if (touchBefore) { clauses.push('(leads.last_touch_at IS NULL OR substr(leads.last_touch_at,1,10)<?)'); values.push(touchBefore); }
+  if (touchFrom) { clauses.push('substr(leads.last_touch_at,1,10)>=?'); values.push(touchFrom); }
+  if (touchTo) { clauses.push('substr(leads.last_touch_at,1,10)<=?'); values.push(touchTo); }
   const minimum = Number(params.get('minScore'));
   if (minimum > 0) { clauses.push('leads.score>=?'); values.push(minimum); }
   const name = params.get('name');

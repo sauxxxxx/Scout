@@ -3,6 +3,9 @@ import './globals.css';
 
 const description = 'Find local businesses, track follow-ups and manage your sales pipeline.';
 
+// Runs before the page paints, so nobody sees a white flash or their text jump to another size.
+const themeScript = "try{var t=localStorage.getItem('scout.theme')||'System';if(t==='Dark'||(t==='System'&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.dataset.theme='dark';var d=document.documentElement.dataset;[['scout.fontSize','fontSize'],['scout.density','density'],['scout.accent','accent'],['scout.sidebar','sidebar']].forEach(function(p){var v=localStorage.getItem(p[0]);if(v)d[p[1]]=v})}catch(e){}";
+
 export const metadata: Metadata = {
   metadataBase: new URL('https://scoutcrm.pages.dev'),
   title: 'Scout',
@@ -22,5 +25,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}</body></html>;
+  return <html lang="en" suppressHydrationWarning><head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head><body>{children}</body></html>;
 }

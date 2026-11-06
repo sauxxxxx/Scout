@@ -1,10 +1,12 @@
-import { createActivitiesLeadIndex, createActivitiesStatusIndex, createActivitiesTable, createCompaniesTable, createContactsTable, createFinderAiCacheTable, createFinderAiUsageIndex, createFinderAiUsageTable, createFinderResultsIndex, createFinderResultsTable, createFinderSearchesIndex, createFinderSearchesTable, createLeadsTable, createOpportunitiesTable, createOpportunityFinderAssessmentsIndex, createOpportunityFinderAssessmentsTable, createTasksLeadStatusIndex, createTasksTable } from '@/db/schema';
+import { createActivitiesLeadIndex, createActivitiesStatusIndex, createActivitiesTable, createCompaniesTable, createContactsTable, createFinderAiCacheTable, createFinderSeenPlacesTable, createFinderAiUsageIndex, createFinderAiUsageTable, createFinderResultsIndex, createFinderResultsTable, createFinderSearchesIndex, createFinderSearchesTable, createLeadsTable, createOpportunitiesTable, createOpportunityFinderAssessmentsIndex, createOpportunityFinderAssessmentsTable, createTasksLeadStatusIndex, createTasksTable } from '@/db/schema';
 import { taskDueIso } from '@/lib/task-dates';
+import { touchTypesSql } from '@/lib/last-touch';
+import { FINDER_DEFAULT_LEADS } from '@/lib/finder-cells';
 
 export const DEFAULT_WORKSPACE_ID = 'scout-default';
 
 /** Bump when anything in migrateFoundationSchema changes. Requests then skip the whole setup unless this moved. */
-export const SCHEMA_VERSION = 16;
+export const SCHEMA_VERSION = 19;
 
 const createUsersTable = `CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
@@ -65,6 +67,7 @@ const createWorkspaceSettingsTable = `CREATE TABLE IF NOT EXISTS workspace_setti
   allowed_domains_json TEXT NOT NULL DEFAULT '[]',
   admins_can_invite INTEGER NOT NULL DEFAULT 1,
   role_permissions_json TEXT NOT NULL DEFAULT '{}',
+  customization_json TEXT NOT NULL DEFAULT '{}',
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 )`;
 
@@ -148,6 +151,8 @@ async function ensureOnce(db: D1Database) {
   const meta = await db.prepare('SELECT version FROM schema_meta WHERE id=1').first<{ version: number }>();
   if (Number(meta?.version || 0) >= SCHEMA_VERSION) return;
   await migrateFoundationSchema(db);
+  if (Number(meta?.version || 0) < 17) await migrateSalesWorkflow(db);
+  if (Number(meta?.version || 0) < 19) await migrateReportDates(db);
   await db.prepare('INSERT INTO schema_meta (id,version) VALUES (1,?) ON CONFLICT(id) DO UPDATE SET version=excluded.version,updated_at=CURRENT_TIMESTAMP').bind(SCHEMA_VERSION).run();
 }
 
@@ -178,6 +183,48 @@ async function rebuildLeadsKey(db: D1Database) {
   ]);
 }
 
+/** Runs once. Older records never stored these dates, so their last update is the closest record of when they happened. */
+async function migrateReportDates(db: D1Database) {
+  await db.batch([
+    db.prepare("UPDATE tasks SET completed_at=updated_at WHERE completed_at IS NULL AND status='Completed'"),
+    db.prepare("UPDATE opportunities SET proposal_at=updated_at WHERE proposal_at IS NULL AND stage='Proposal'"),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_tasks_completed ON tasks(workspace_id,completed_at)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_opportunities_proposal ON opportunities(workspace_id,proposal_at)'),
+  ]);
+}
+
+/**
+ * Runs once. Reps should only see their own leads, so anyone who kept "See all records" from the old default loses it.
+ * An owner can still switch it back on afterwards, which is why this never runs again.
+ */
+async function migrateSalesWorkflow(db: D1Database) {
+  const read = (json: string) => { try { return JSON.parse(json || '{}') as Record<string, unknown>; } catch { return {}; } };
+  const settings = await db.prepare('SELECT workspace_id,role_permissions_json FROM workspace_settings').all<{ workspace_id: string; role_permissions_json: string }>();
+  for (const row of settings.results) {
+    const stored = read(row.role_permissions_json) as Record<string, Record<string, boolean>>;
+    for (const role of ['member', 'viewer']) if (stored[role]) stored[role] = { ...stored[role], 'records:view_all': false };
+    await db.prepare('UPDATE workspace_settings SET role_permissions_json=? WHERE workspace_id=?').bind(JSON.stringify(stored), row.workspace_id).run();
+  }
+  const roles = await db.prepare('SELECT id,permissions_json FROM workspace_custom_roles').all<{ id: string; permissions_json: string }>();
+  for (const row of roles.results) await db.prepare('UPDATE workspace_custom_roles SET permissions_json=? WHERE id=?').bind(JSON.stringify({ ...read(row.permissions_json), 'records:view_all': false }), row.id).run();
+  // 20 was the old default, so everyone who never chose a count moves to the new one.
+  const people = await db.prepare("SELECT id,preferences_json FROM users WHERE preferences_json LIKE '%finderLeadCount%'").all<{ id: string; preferences_json: string }>();
+  for (const row of people.results) {
+    const stored = read(row.preferences_json);
+    if (stored.finderLeadCount === 20) await db.prepare('UPDATE users SET preferences_json=? WHERE id=?').bind(JSON.stringify({ ...stored, finderLeadCount: FINDER_DEFAULT_LEADS }), row.id).run();
+  }
+  await db.batch([
+    // Older activity saved the words "Just now". Scout's teams are in UTC+8, and created_at is UTC.
+    db.prepare("UPDATE activities SET occurred_at=strftime('%Y-%m-%dT%H:%M',created_at,'+8 hours') WHERE (occurred_at IS NULL OR occurred_at='') AND COALESCE(status,'Completed')!='Scheduled'"),
+    db.prepare('UPDATE leads SET changed_at=updated_at WHERE changed_at IS NULL'),
+    db.prepare(`UPDATE leads SET last_touch_at=(SELECT MAX(a.occurred_at) FROM activities a WHERE a.workspace_id=leads.workspace_id AND a.lead_id=leads.id AND a.deleted_at IS NULL AND COALESCE(a.status,'Completed')='Completed' AND LOWER(a.type) IN (${touchTypesSql}))`),
+    db.prepare("UPDATE opportunities SET closed_at=updated_at WHERE closed_at IS NULL AND stage IN ('Won','Lost')"),
+    db.prepare("UPDATE opportunities SET owner=(SELECT owner FROM leads WHERE leads.id=opportunities.lead_id) WHERE stage NOT IN ('Won','Lost') AND EXISTS (SELECT 1 FROM leads WHERE leads.id=opportunities.lead_id AND leads.owner!=opportunities.owner)"),
+    db.prepare('UPDATE companies SET owner=(SELECT owner FROM leads WHERE leads.company_id=companies.id ORDER BY updated_at DESC LIMIT 1) WHERE EXISTS (SELECT 1 FROM leads WHERE leads.company_id=companies.id)'),
+    db.prepare("INSERT OR IGNORE INTO finder_seen_places (workspace_id,provider,provider_record_id,first_seen_at,last_seen_at) SELECT workspace_id,provider,provider_record_id,MIN(created_at),MAX(created_at) FROM finder_results WHERE provider='Google Places' GROUP BY workspace_id,provider,provider_record_id"),
+  ]);
+}
+
 async function migrateFoundationSchema(db: D1Database) {
   await db.batch([
     db.prepare(createRateLimitsTable),
@@ -200,6 +247,7 @@ async function migrateFoundationSchema(db: D1Database) {
     db.prepare(createFinderResultsTable),
     db.prepare(createFinderAiCacheTable),
     db.prepare(createFinderAiUsageTable),
+    db.prepare(createFinderSeenPlacesTable),
     db.prepare(createOpportunityFinderAssessmentsTable),
     db.prepare(createActivitiesStatusIndex),
     db.prepare(createActivitiesLeadIndex),
@@ -214,7 +262,10 @@ async function migrateFoundationSchema(db: D1Database) {
     status: "TEXT NOT NULL DEFAULT 'active'", last_seen_at: 'TEXT', job_title: "TEXT NOT NULL DEFAULT ''", phone: "TEXT NOT NULL DEFAULT ''",
     timezone: "TEXT NOT NULL DEFAULT 'Asia/Manila'", language: "TEXT NOT NULL DEFAULT 'English (Philippines)'", date_format: "TEXT NOT NULL DEFAULT 'MMM d, yyyy'",
     time_format: "TEXT NOT NULL DEFAULT '12-hour'", preferences_json: "TEXT NOT NULL DEFAULT '{}'", notifications_json: "TEXT NOT NULL DEFAULT '{}'",
+    view_json: "TEXT NOT NULL DEFAULT '{}'",
   });
+
+  await addColumns(db, 'workspace_settings', { customization_json: "TEXT NOT NULL DEFAULT '{}'" });
 
   await addColumns(db, 'workspace_memberships', { custom_role_id: 'TEXT', suspended: 'INTEGER NOT NULL DEFAULT 0' });
   await addColumns(db, 'workspace_invitations', {
@@ -224,10 +275,11 @@ async function migrateFoundationSchema(db: D1Database) {
 
   await addColumns(db, 'leads', {
     id: 'TEXT', workspace_id: 'TEXT', company_id: 'TEXT', primary_contact_id: 'TEXT', version: 'INTEGER NOT NULL DEFAULT 1', created_at: 'TEXT',
-    finder_provider: 'TEXT', finder_record_id: 'TEXT', business_address: "TEXT NOT NULL DEFAULT ''",
+    finder_provider: 'TEXT', finder_record_id: 'TEXT', business_address: "TEXT NOT NULL DEFAULT ''", last_touch_at: 'TEXT', changed_at: 'TEXT',
   });
+  await addColumns(db, 'opportunities', { closed_at: 'TEXT', proposal_at: 'TEXT' });
   await addColumns(db, 'tasks', {
-    uid: 'TEXT', workspace_id: 'TEXT', lead_id: 'TEXT', company_id: 'TEXT', contact_id: 'TEXT', opportunity_id: 'TEXT', due_at: 'TEXT', version: 'INTEGER NOT NULL DEFAULT 1', created_at: 'TEXT',
+    uid: 'TEXT', workspace_id: 'TEXT', lead_id: 'TEXT', company_id: 'TEXT', contact_id: 'TEXT', opportunity_id: 'TEXT', due_at: 'TEXT', version: 'INTEGER NOT NULL DEFAULT 1', created_at: 'TEXT', completed_at: 'TEXT',
   });
   await addColumns(db, 'activities', {
     uid: 'TEXT', workspace_id: 'TEXT', lead_id: 'TEXT', company_id: 'TEXT', contact_id: 'TEXT', opportunity_id: 'TEXT', related_task_uid: 'TEXT', version: 'INTEGER NOT NULL DEFAULT 1',
@@ -239,6 +291,7 @@ async function migrateFoundationSchema(db: D1Database) {
   await addColumns(db, 'finder_searches', {
     map_bounds_json: 'TEXT', map_area_json: 'TEXT', location_code: 'TEXT', location_type: 'TEXT', location_province: 'TEXT', location_region: 'TEXT', industry_type: 'TEXT', industry_psic_code: 'TEXT',
     sales_focus: "TEXT NOT NULL DEFAULT 'Website & booking'", requirement_mode: "TEXT NOT NULL DEFAULT 'all'",
+    hidden_found_count: 'INTEGER NOT NULL DEFAULT 0', include_found: 'INTEGER NOT NULL DEFAULT 0', search_state_json: 'TEXT', coverage: 'TEXT',
   });
   await addColumns(db, 'finder_results', {
     latitude: 'REAL', longitude: 'REAL', distance_km: 'REAL', facebook_status: "TEXT NOT NULL DEFAULT 'not_found'", facebook_verified_at: 'TEXT',
@@ -271,6 +324,9 @@ async function migrateFoundationSchema(db: D1Database) {
     db.prepare('CREATE INDEX IF NOT EXISTS idx_audit_workspace ON workspace_audit_log(workspace_id,created_at)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(workspace_id,user_id,created_at)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_leads_workspace ON leads(workspace_id, updated_at)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_leads_changed ON leads(workspace_id,archived,changed_at)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_leads_last_touch ON leads(workspace_id,last_touch_at)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_opportunities_closed ON opportunities(workspace_id,stage,closed_at)'),
     db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_finder_identity ON leads(workspace_id,finder_provider,finder_record_id) WHERE finder_provider IS NOT NULL AND finder_record_id IS NOT NULL'),
     db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_stable_id ON tasks(uid)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_tasks_workspace ON tasks(workspace_id, updated_at)'),

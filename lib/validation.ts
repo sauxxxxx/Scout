@@ -1,3 +1,4 @@
+import { FINDER_MAX_LEADS } from '@/lib/finder-cells';
 import { z } from 'zod';
 import { finderAreaSchema, finderBoundsSchema } from '@/lib/finder-map';
 import { facebookResearchSchema, normalizeFacebookPageUrl, salesFocuses } from '@/lib/finder-sales';
@@ -31,6 +32,8 @@ export const leadInputSchema = z.object({
   closeDate: optionalText,
   archived: z.boolean().optional(),
   createdAt: optionalText,
+  lastTouchAt: optionalText,
+  changedAt: optionalText,
 }).strict();
 
 export const companyInputSchema = z.object({
@@ -54,6 +57,7 @@ export const opportunityInputSchema = z.object({
   name:z.string().trim().min(1).max(200), stage:z.enum(leadStatuses), value:z.number().finite().nonnegative(), probability:z.number().int().min(0).max(100),
   closeDate:optionalText, owner:z.string().trim().min(1).max(120), priority:z.enum(['Low','Medium','High']), outcome:optionalText, archived:z.boolean().optional(),
   fromFinder: z.boolean().optional(),
+  closedAt: optionalText,
 }).strict();
 
 export const taskInputSchema = z.object({
@@ -122,7 +126,8 @@ export const finderSearchSchema = z.object({
   locationType: z.string().trim().max(50).optional(),
   locationProvince: z.string().trim().max(160).optional(),
   locationRegion: z.string().trim().max(160).optional(),
-  targetCount: z.number().int().min(1).max(60).optional(),
+  targetCount: z.number().int().min(1).max(FINDER_MAX_LEADS).optional(),
+  includeFound: z.boolean().optional(),
   requirements: z.array(z.enum(finderRequirements)).min(1).max(finderRequirements.length).optional(),
   salesFocus: z.enum(salesFocuses).default('Website & booking'),
   requirementMode: z.enum(['all', 'any']).default('all'),

@@ -25,6 +25,6 @@ describe('Scout profile preferences', () => {
     expect(profileUpdateSchema.safeParse(profile).success).toBe(true);
     expect(profileUpdateSchema.safeParse({ ...profile, avatarUrl: 'javascript:alert(1)' }).success).toBe(false);
     expect(profileUpdateSchema.safeParse({ ...profile, preferences: { ...profileDefaults, finderRadius: 4 } }).success).toBe(false);
-    expect(profileUpdateSchema.safeParse({ ...profile, preferences: { ...profileDefaults, finderLeadCount: 15 } }).success).toBe(false);
+    expect(profileUpdateSchema.safeParse({ ...profile, preferences: { ...profileDefaults, finderLeadCount: 301 } }).success).toBe(false);
   });
 });

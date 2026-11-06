@@ -1,4 +1,5 @@
 import { authenticateRequest } from '@/lib/auth';
+import { parseViewSettings } from '@/lib/view-settings';
 import { notificationDefaults, parseObject, profileDefaults, profilePreferencesSchema, profileUpdateSchema, type ProfileUpdate } from '@/lib/profile';
 import { activityFiles } from '@/lib/activity-store';
 import { currentSessionHash, SCOUT_SESSION_COOKIE } from '@/lib/session-auth';
@@ -8,7 +9,7 @@ export const dynamic = 'force-dynamic';
 
 type ProfileRow = {
   id: string; email: string; name: string; avatar_url: string | null; job_title: string; phone: string; timezone: string; language: string;
-  date_format: string; time_format: string; preferences_json: string; notifications_json: string; created_at: string;
+  date_format: string; time_format: string; preferences_json: string; notifications_json: string; view_json: string; created_at: string;
 };
 
 function profileFrom(row: ProfileRow) {
@@ -33,7 +34,7 @@ function profileFrom(row: ProfileRow) {
 }
 
 async function responseData(request: Request, db: D1Database, userId: string, localDevelopment = false) {
-  const row = await db.prepare(`SELECT id,email,name,avatar_url,job_title,phone,timezone,language,date_format,time_format,preferences_json,notifications_json,created_at FROM users WHERE id=?`)
+  const row = await db.prepare(`SELECT id,email,name,avatar_url,job_title,phone,timezone,language,date_format,time_format,preferences_json,notifications_json,view_json,created_at FROM users WHERE id=?`)
     .bind(userId).first<ProfileRow>();
   if (!row) return null;
   const currentHash = await currentSessionHash(request);
@@ -43,6 +44,7 @@ async function responseData(request: Request, db: D1Database, userId: string, lo
   ]);
   return {
     profile: profileFrom(row),
+    view: parseViewSettings(row.view_json),
     memberships: (memberships.results as Array<Record<string, unknown>>).map(item => ({ id: String(item.id), name: String(item.name), role: String(item.role), joinedAt: String(item.created_at) })),
     sessions: (sessions.results as Array<Record<string, unknown>>).map((item, index) => ({
       id: String(item.token_hash).slice(0, 16),

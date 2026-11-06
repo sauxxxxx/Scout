@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCustomization } from '@/components/crm/shared';
+import { FINDER_DEFAULT_LEADS, FINDER_MAX_LEADS } from '@/lib/finder-cells';
 import {
   FiAlertTriangle,
   FiBriefcase,
@@ -36,11 +38,22 @@ import { useViewState } from '@/lib/client-view-cache';
 import { useWorkspaceMembers } from '@/components/WorkspaceMembers';
 
 type FinderStatus = 'Saved' | 'Queued' | 'Running' | 'Complete' | 'Partial' | 'Failed' | 'Cancelled';
+function FinderCoverageNote({ search }: { search: { foundCount: number; targetCount: number; hiddenFoundCount?: number; coverage?: 'target' | 'limit' | 'complete' } }) {
+  const hidden = search.hiddenFoundCount || 0;
+  const short = search.foundCount < search.targetCount;
+  const notes = [
+    hidden ? `${hidden} ${hidden === 1 ? 'business' : 'businesses'} already found ${hidden === 1 ? 'was' : 'were'} left out.` : '',
+    short && search.coverage === 'complete' ? `Found ${search.foundCount} of ${search.targetCount}: that's everything new in this area. Try a wider area for more.` : '',
+    short && search.coverage === 'limit' ? `Found ${search.foundCount} of ${search.targetCount}. Scout stopped here to control search costs. Try a different area or run it again.` : '',
+  ].filter(Boolean);
+  return notes.length ? <p className="finder-coverage-note" role="status">{notes.join(' ')}</p> : null;
+}
+
 type FinderSearch = {
   area?: FinderArea;
   id: string; name: string; industry: string; location: string; targetCount: number; requirements: string[]; salesFocus: SalesFocus; requirementMode: RequirementMode;
   industryType?: string; industryPsicCode?: string; locationCode?: string; locationType?: string; locationProvince?: string; locationRegion?: string;
-  provider: string; status: FinderStatus; progress: number; stage: string; foundCount: number; importedCount: number;
+  provider: string; status: FinderStatus; progress: number; stage: string; foundCount: number; importedCount: number; hiddenFoundCount?: number; coverage?: 'target' | 'limit' | 'complete';
   saved: boolean; retryCount: number; error?: string; startedAt?: string; completedAt?: string; createdAt: string; updatedAt: string;
 };
 type Provenance = { field: string; provider: string; sourceUrl: string; retrievedAt: string };
@@ -119,7 +132,9 @@ function displayFinderError(message?: string) {
 
 export function FinderWorkspace({ notify, leads, onImportedLeads, onOpenLead, setPage, finderView, setFinderView, onBreadcrumbChange, defaults }: Props) {
   const { assignableMembers, currentMember, currentRole, defaultOwner } = useWorkspaceMembers();
-  const [criteria, setCriteria] = useViewState('finder.criteria.v2', { industry: 'Dental clinics', industryType: 'dentist', industryPsicCode: '8620', location: 'City of Cebu', locationCode: '0730600000', locationType: 'City', locationProvince: '', locationRegion: '', count: String(defaults?.leadCount || 20), radius: String(defaults?.radius || 10) });
+  const { statusLabel } = useCustomization();
+  const [criteria, setCriteria] = useViewState('finder.criteria.v3', { industry: 'Dental clinics', industryType: 'dentist', industryPsicCode: '8620', location: 'City of Cebu', locationCode: '0730600000', locationType: 'City', locationProvince: '', locationRegion: '', count: String(defaults?.leadCount || FINDER_DEFAULT_LEADS), ...({} as { includeFound?: boolean }), radius: String(defaults?.radius || 10) });
+  const leadTarget = Math.min(FINDER_MAX_LEADS, Math.max(1, Math.round(Number(criteria.count)) || FINDER_DEFAULT_LEADS));
   const [requirements, setRequirements] = useViewState('finder.requirements.v2', ['Phone', 'Facebook']);
   const [searches, setSearches] = useViewState<FinderSearch[]>('finder.searches', []);
   const [activeSearch, setActiveSearch] = useViewState<FinderSearch | null>('finder.activeSearch', null);
@@ -147,6 +162,7 @@ export function FinderWorkspace({ notify, leads, onImportedLeads, onOpenLead, se
   const [filter, setFilter] = useViewState('finder.filter.sales.v1', 'All results');
   const [sort, setSort] = useViewState('finder.sort', 'Highest score');
   const [runMenu, setRunMenu] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<FinderSearch | null>(null);
   const { capabilities } = useWorkspaceMembers();
   const canRun = capabilities['finder:run'];
   const canDelete = capabilities['records:delete'];
@@ -272,7 +288,7 @@ export function FinderWorkspace({ notify, leads, onImportedLeads, onOpenLead, se
       const movedArea = Boolean(selectedArea && activeSearch);
       const body = searchId
         ? { action: 'run', searchId }
-        : { action: 'run', industry: movedArea ? activeSearch!.industry : criteria.industry.trim(), industryType: movedArea ? activeSearch!.industryType : criteria.industryType || undefined, industryPsicCode: movedArea ? activeSearch!.industryPsicCode : criteria.industryPsicCode || undefined, location: movedArea ? selectedLocation || activeSearch!.location : criteria.location.trim(), locationCode: movedArea && selectedLocation ? undefined : movedArea ? activeSearch!.locationCode : criteria.locationCode || undefined, locationType: movedArea && selectedLocation ? 'Map-selected area' : movedArea ? activeSearch!.locationType : criteria.locationType || undefined, locationProvince: movedArea && selectedLocation ? undefined : movedArea ? activeSearch!.locationProvince : criteria.locationProvince || undefined, locationRegion: movedArea && selectedLocation ? undefined : movedArea ? activeSearch!.locationRegion : criteria.locationRegion || undefined, targetCount: movedArea ? activeSearch!.targetCount : Number(criteria.count), salesFocus: movedArea ? activeSearch!.salesFocus : salesFocus, requirementMode: movedArea ? activeSearch!.requirementMode : requirementMode, requirements: movedArea ? activeSearch!.requirements : requirements, area: selectedArea || area };
+        : { action: 'run', industry: movedArea ? activeSearch!.industry : criteria.industry.trim(), industryType: movedArea ? activeSearch!.industryType : criteria.industryType || undefined, industryPsicCode: movedArea ? activeSearch!.industryPsicCode : criteria.industryPsicCode || undefined, location: movedArea ? selectedLocation || activeSearch!.location : criteria.location.trim(), locationCode: movedArea && selectedLocation ? undefined : movedArea ? activeSearch!.locationCode : criteria.locationCode || undefined, locationType: movedArea && selectedLocation ? 'Map-selected area' : movedArea ? activeSearch!.locationType : criteria.locationType || undefined, locationProvince: movedArea && selectedLocation ? undefined : movedArea ? activeSearch!.locationProvince : criteria.locationProvince || undefined, locationRegion: movedArea && selectedLocation ? undefined : movedArea ? activeSearch!.locationRegion : criteria.locationRegion || undefined, includeFound: movedArea ? undefined : criteria.includeFound || undefined, targetCount: movedArea ? activeSearch!.targetCount : leadTarget, salesFocus: movedArea ? activeSearch!.salesFocus : salesFocus, requirementMode: movedArea ? activeSearch!.requirementMode : requirementMode, requirements: movedArea ? activeSearch!.requirements : requirements, area: selectedArea || area };
       const data = await request('/api/finder', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
       applyPayload(data);
       setResults(data.results || []);
@@ -335,7 +351,7 @@ export function FinderWorkspace({ notify, leads, onImportedLeads, onOpenLead, se
   };
 
   const deleteSearch = async (search: FinderSearch) => {
-    if (!window.confirm(`Delete “${search.name}”? This cannot be undone.`)) return;
+    setDeleting(null);
     try {
       await request(`/api/finder?id=${encodeURIComponent(search.id)}`, { method: 'DELETE' });
       setSearches((current) => current.filter((item) => item.id !== search.id));
@@ -446,12 +462,19 @@ export function FinderWorkspace({ notify, leads, onImportedLeads, onOpenLead, se
             <button role="menuitem" onClick={() => { setRunMenu(null); duplicateSearch(search); }}>Duplicate</button>
             <button role="menuitem" onClick={() => { setRunMenu(null); setEditingSearch(search.id); setEditingName(search.name); }}>Rename</button>
             <button role="menuitem" onClick={() => { setRunMenu(null); updateSearch(search, search.saved ? 'unsave' : 'save'); }}>{search.saved ? 'Remove from saved' : 'Save search'}</button>
-            {canDelete && <button role="menuitem" className="danger-text" onClick={() => { setRunMenu(null); deleteSearch(search); }}>Delete</button>}
+            {canDelete && <button role="menuitem" className="danger-text" onClick={() => { setRunMenu(null); setDeleting(search); }}>Delete</button>}
           </div>}
         </div>
       </div>
     </div>)}
     {!items.length && <div className="finder-empty-state"><FiSearch /><strong>No searches here yet</strong><span>Run or save a search and it will appear here.</span></div>}
+    {deleting && <div className="modal-backdrop" onClick={() => setDeleting(null)}>
+      <div className="modal team-dialog" role="alertdialog" aria-label="Delete this search?" onClick={event => event.stopPropagation()}>
+        <header><h2>Delete this search?</h2></header>
+        <div className="team-dialog-body"><p>“{deleting.name}” and its results will be removed. This can’t be undone.</p></div>
+        <footer><button className="text-link" onClick={() => setDeleting(null)}>Cancel</button><button className="primary" onClick={() => deleteSearch(deleting)}>Delete search</button></footer>
+      </div>
+    </div>}
   </div>;
 
   if (finderView === 'Search history' || finderView === 'Saved searches') {
@@ -468,11 +491,13 @@ export function FinderWorkspace({ notify, leads, onImportedLeads, onOpenLead, se
       <div className="finder-brief-form">
         <div className="finder-brief-row"><label htmlFor="finder-industry">Who</label><div className="finder-brief-control finder-combobox"><FiBriefcase /><input id="finder-industry" value={criteria.industry} onFocus={() => setIndustryOpen(true)} onBlur={() => window.setTimeout(() => setIndustryOpen(false), 150)} onChange={(event) => { setCriteria({ ...criteria, industry: event.target.value, industryType: '', industryPsicCode: '' }); setIndustryOpen(true); }} placeholder="Search industries" autoComplete="off" />{industryOpen && <div className="finder-combobox-menu">{finderIndustries.filter(item => `${item.label} ${item.group}`.toLowerCase().includes(criteria.industry.toLowerCase())).slice(0, 10).map(item => <button type="button" key={item.label} onMouseDown={() => { setCriteria({ ...criteria, industry: item.label, industryType: item.googleType || '', industryPsicCode: item.psicCode || '' }); setIndustryOpen(false); }}><strong>{item.label}</strong><small>{item.group}{item.psicCode ? ` · PSIC ${item.psicCode}` : ''}</small></button>)}</div>}</div></div>
         <div className="finder-brief-row"><label htmlFor="finder-location">Where</label><div><div className="finder-brief-control finder-combobox"><FiMapPin /><input id="finder-location" value={criteria.location} onFocus={() => setLocationOpen(true)} onBlur={() => window.setTimeout(() => setLocationOpen(false), 150)} onChange={(event) => { setCriteria({ ...criteria, location: event.target.value, locationCode: '', locationType: '', locationProvince: '', locationRegion: '' }); setArea(undefined); setLocationOpen(true); }} placeholder="Search Philippine locations" autoComplete="off" />{locationOpen && criteria.location.trim().length >= 2 && <div className="finder-combobox-menu">{locationLoading && <span>Searching locations…</span>}{!locationLoading && locationOptions.map(item => <button type="button" key={item.code} onMouseDown={() => { setCriteria({ ...criteria, location: item.name, locationCode: item.code, locationType: item.type, locationProvince: item.province, locationRegion: item.region }); setArea(undefined); setMapFitVersion(value => value + 1); setLocationOpen(false); }}><strong>{item.name}</strong><small>{[item.type, item.province, item.region].filter(Boolean).join(' · ')} · PSGC {item.code}{item.zipCode ? ` · ${item.zipCode}` : ''}</small></button>)}{!locationLoading && !locationOptions.length && <span>No matching city or municipality</span>}</div>}</div><small className="finder-brief-note">Within {area?.radiusKm || Number(criteria.radius || 10)} km of the selected map center{criteria.locationType === 'Map-selected area' ? ' · chosen from the map' : ''}</small></div></div>
-        <div className="finder-brief-row"><span>Lead count</span><div className="finder-count-options" role="group" aria-label="Lead count">{['10', '20', '40', '60'].map((count) => <button type="button" aria-pressed={criteria.count === count} onClick={() => setCriteria({ ...criteria, count })} key={count}>{count}</button>)}</div></div>
+        <details className="finder-more-options"><summary>More options<small>{leadTarget} leads · {requirements.join(', ')} · {salesFocus}</small></summary>
+        <div className="finder-brief-row"><span>Lead count</span><div className="finder-count-input"><input type="number" inputMode="numeric" min={1} max={FINDER_MAX_LEADS} aria-label="Lead count" value={criteria.count} onChange={event => setCriteria({ ...criteria, count: event.target.value })} onBlur={() => setCriteria({ ...criteria, count: String(leadTarget) })} /><small>Up to {FINDER_MAX_LEADS}. Bigger searches take longer.</small><label className="finder-found-toggle"><input type="checkbox" checked={!!criteria.includeFound} onChange={event => setCriteria({ ...criteria, includeFound: event.target.checked })} />Include businesses already found</label></div></div>
         <div className="finder-brief-row finder-brief-requirements"><span>Contact criteria</span><div>{['Facebook', 'Phone', 'Website', 'Email'].map((item) => <button type="button" aria-pressed={requirements.includes(item)} className={requirements.includes(item) ? 'active' : ''} onClick={() => setRequirements((current) => current.includes(item) ? current.length === 1 ? current : current.filter((value) => value !== item) : [...current, item])} key={item}>{item === 'Facebook' ? <FiFacebook /> : item === 'Phone' ? <FiPhone /> : item === 'Email' ? <FiMail /> : <FiGlobe />}<span>Has {item.toLowerCase()}</span>{requirements.includes(item) && <FiCheck />}</button>)}</div></div>
         <div className="finder-brief-row"><span>Match</span><div className="finder-match-options" role="group" aria-label="Match contact criteria"><button type="button" aria-pressed={requirementMode === 'all'} onClick={() => setRequirementMode('all')}>All selected</button><button type="button" aria-pressed={requirementMode === 'any'} onClick={() => setRequirementMode('any')}>Any selected</button></div></div><div className="finder-brief-row"><label>Sales focus</label><ScoutSelect ariaLabel="Sales focus" value={salesFocus} options={salesFocuses.map(value => ({ value, label: value }))} onChange={value => setSalesFocus(value as SalesFocus)} /></div>
+        </details>
       </div>
-      <footer className="finder-brief-actions"><button className="primary" disabled={busy || !canRun} title={canRun ? undefined : 'Your role cannot run Finder searches'} onClick={() => runSearch()}>{starting ? <><Spinner /> Starting search…</> : <><FiSearch /> Find up to {criteria.count} businesses</>}</button><button className="finder-save-link" disabled={busy} onClick={() => saveDraft()}><FiSave /> Save this search</button><button className="finder-save-link" disabled={busy} onClick={() => saveDraft(true)}><FiFacebook /> Add a Facebook prospect</button></footer>
+      <footer className="finder-brief-actions"><button className="primary" disabled={busy || !canRun} title={canRun ? undefined : 'Your role cannot run Finder searches'} onClick={() => runSearch()}>{starting ? <><Spinner /> Starting search…</> : <><FiSearch /> Find up to {leadTarget} businesses</>}</button><button className="finder-save-link" disabled={busy} onClick={() => saveDraft()}><FiSave /> Save this search</button><button className="finder-save-link" disabled={busy} onClick={() => saveDraft(true)}><FiFacebook /> Add a Facebook prospect</button></footer>
     </section><FinderMap setup location={`${criteria.location}, Philippines`} area={area} radiusKm={Number(criteria.radius || 10)} fitAreaKey={mapFitVersion} onRadiusChange={(radiusKm) => { setCriteria({ ...criteria, radius: String(radiusKm) }); if (area) setArea({ ...area, radiusKm }); }} onArea={(nextArea, details) => { setArea(nextArea); if (details?.locationLabel) setCriteria({ ...criteria, location: details.locationLabel, locationCode: '', locationType: 'Map-selected area', locationProvince: '', locationRegion: '' }); }} busy={busy} /></div>
     <section className="finder-recent"><div className="finder-section-title"><div><h2>Recent searches</h2></div><button onClick={() => setFinderView('Search history')}>View all <FiChevronRight /></button></div>{loading ? <div className="finder-loading"><Spinner /> Loading recent searches…</div> : historyTable(searches.slice(0, 4))}</section>
   </div>;
@@ -497,6 +522,7 @@ export function FinderWorkspace({ notify, leads, onImportedLeads, onOpenLead, se
   return <div className="finder-workspace finder-results-workspace">{manualOpen && <FinderManualProspect location={activeSearch.location} onClose={() => setManualOpen(false)} onAdd={addManualProspect} />}{discardReview && <ProfileDialog title="Discard unsaved Facebook review?" onClose={() => setDiscardReview(false)}><p className="finder-dialog-copy">Your latest observations have not been saved.</p><footer><button onClick={() => setDiscardReview(false)}>Keep editing</button><button className="primary" onClick={() => { setDiscardReview(false); setReviewDirty(false); setPreview(null); }}>Discard changes</button></footer></ProfileDialog>}
     <header className="finder-page-head compact"><div><h1>{activeSearch.industry} in {activeSearch.location}</h1><div className="finder-context-chips"><span>{activeSearch.targetCount} requested</span><span>{activeFocus}</span><span>{activeMode === 'all' ? 'All' : 'Any'}: {activeRequirements.join(' + ') || 'No contact criteria'}</span><span>{isRunning ? friendlyStage : activeSearch.status === 'Saved' ? 'Manual prospect list' : apiDate(activeSearch.completedAt)}</span></div></div><div className="finder-result-actions"><button className="secondary" disabled={isRunning} onClick={() => setManualOpen(true)}><FiFacebook /> Add Facebook prospect</button><button className="secondary" onClick={() => duplicateSearch(activeSearch)}><FiEdit3 /> Edit search</button><button className="secondary" onClick={() => updateSearch(activeSearch, activeSearch.saved ? 'unsave' : 'save')}><FiSave /> {activeSearch.saved ? 'Saved' : 'Save search'}</button><button className="primary" onClick={() => { setActiveSearch(null); setResults([]); setSelected([]); setReviewingEarlySearchId(null); }}>New search</button></div></header>
     {isRunning && <section className="finder-early-progress" aria-live="polite"><div className="finder-early-progress-main"><Spinner /><span><strong>{friendlyStage}</strong><small>{foundCount} found · {verifiedCount} ready · {elapsedBetween(activeSearch.startedAt, activeSearch.updatedAt)}</small></span></div><div className="finder-early-track" role="progressbar" aria-label="Search progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={searchProgress}><i style={{ width: `${searchProgress}%` }} /></div><strong>{searchProgress}%</strong><button onClick={() => setReviewingEarlySearchId(null)}>View progress</button><button className="secondary" disabled={busy} onClick={cancelSearch}>Cancel</button></section>}
+    {activeSearch.status === 'Complete' && <FinderCoverageNote search={activeSearch} />}
     {activeSearch.status === 'Partial' && <div className="finder-alert warning"><FiAlertTriangle /><span><strong>Partial results available.</strong> {displayFinderError(activeSearch.error)}</span>{canRun && <button onClick={() => runSearch(activeSearch.id)}>Resume</button>}</div>}
     {importSummary && <div className="finder-alert success"><FiCheck /><span><strong>{importSummary.imported} imported.</strong>{importSummary.skipped ? ` ${importSummary.skipped} duplicate${importSummary.skipped === 1 ? '' : 's'} skipped.` : ' Follow-up tasks were created automatically.'}</span><button onClick={() => setPage('Leads')}>View Leads</button></div>}
     {error && <div className="finder-alert error"><FiAlertTriangle />{error}<button onClick={() => setError('')}><FiX /></button></div>}
@@ -529,7 +555,7 @@ export function FinderWorkspace({ notify, leads, onImportedLeads, onOpenLead, se
           {importForm.assignmentMode === 'round_robin' && <fieldset className="finder-assignee-list"><legend>Rotate between</legend>{availableAssignees.map(member => <label key={member.id}><input type="checkbox" checked={roundRobinIds.includes(member.id)} onChange={() => setImportForm({ ...importForm, assigneeIds: roundRobinIds.includes(member.id) ? roundRobinIds.filter(id => id !== member.id) : [...roundRobinIds, member.id] })} /> {member.name}</label>)}</fieldset>}
           {importForm.assignmentMode === 'manual' && <div className="finder-manual-assignments">{selected.map(resultId => <label key={resultId}><span>{results.find(result => result.id === resultId)?.name || 'Selected business'}</span><ScoutSelect ariaLabel={`Owner for ${results.find(result => result.id === resultId)?.name}`} value={resolvedManualAssignments[resultId]} onChange={ownerId => setImportForm({...importForm,manualAssignments:{...importForm.manualAssignments,[resultId]:ownerId}})} options={availableAssignees.map(member=>({value:member.id,label:member.name}))} /></label>)}</div>}
           <label>Priority<ScoutSelect ariaLabel="Import priority" value={importForm.priority} onChange={priority => setImportForm({...importForm,priority})} options={['High','Medium','Low'].map(value=>({value,label:value}))} /></label>
-          <label>Lead status<ScoutSelect ariaLabel="Imported lead status" value={importForm.status} onChange={status => setImportForm({...importForm,status})} options={['New','Contacted','Interested'].map(value=>({value,label:value}))} /></label>
+          <label>Lead status<ScoutSelect ariaLabel="Imported lead status" value={importForm.status} onChange={status => setImportForm({...importForm,status})} options={['New','Contacted','Interested'].map(value=>({value,label:statusLabel(value)}))} /></label>
           <label>First follow-up<input type="date" value={importForm.followUpDate} onChange={(event) => setImportForm({ ...importForm, followUpDate: event.target.value })} /></label>
         </div>
         {!availableAssignees.length && <div className="finder-alert error">Add an active member before importing leads.</div>}

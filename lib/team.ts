@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { customizationSchema, defaultCustomization, parseCustomization, type Customization } from '@/lib/customization';
 import { defaultRolePermissions, workspaceCapabilities, type CapabilitySet, type RolePermissions, type WorkspaceCapability, type WorkspaceRole } from '@/lib/permissions';
 import { landingPages } from '@/lib/profile';
 
@@ -16,10 +17,11 @@ export const capabilityDetails: Record<WorkspaceCapability, { label: string; des
   'finder:run': { label: 'Run Finder searches', description: 'Each search uses your Google and Gemini quota.' },
   'records:delete': { label: 'Delete records', description: 'Delete tasks, contacts, activities and searches.' },
   'records:export': { label: 'Export leads', description: 'Download leads as a CSV file.' },
-  'records:view_all': { label: 'See all records', description: 'Off means only their own records and anything linked to them.' },
+  'records:view_all': { label: 'See all records', description: 'Off means they only see leads assigned to them, plus any lead where they hold an open task.' },
 };
 
 export type WorkspaceSettings = {
+  customization: Customization;
   defaultRole: 'admin' | 'member' | 'viewer';
   senderName: string;
   emailMessage: string;
@@ -31,6 +33,7 @@ export type WorkspaceSettings = {
 export type CustomRole = { id: string; name: string; baseRole: 'member' | 'viewer'; capabilities: CapabilitySet };
 
 export const defaultWorkspaceSettings: WorkspaceSettings = {
+  customization: defaultCustomization,
   defaultRole: 'member',
   senderName: '',
   emailMessage: '',
@@ -51,6 +54,7 @@ export const workspaceSettingsSchema = z.object({
   allowedDomains: z.array(domainSchema).max(20),
   adminsCanInvite: z.boolean(),
   rolePermissions: z.object({ member: capabilitySetSchema, viewer: capabilitySetSchema }).strict(),
+  customization: customizationSchema,
 }).strict();
 
 export const customRoleInputSchema = z.object({
@@ -86,6 +90,7 @@ export function parseWorkspaceSettings(row: Record<string, unknown> | null | und
   const stored = parseJson<Partial<RolePermissions>>(row.role_permissions_json, {});
   const allowedDomains = parseJson<string[]>(row.allowed_domains_json, []);
   return {
+    customization: parseCustomization(row.customization_json),
     defaultRole: row.default_role === 'admin' || row.default_role === 'viewer' ? row.default_role : 'member',
     senderName: String(row.sender_name || ''),
     emailMessage: String(row.email_message || ''),

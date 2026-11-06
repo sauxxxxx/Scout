@@ -9,15 +9,10 @@ type OpportunityLike = { owner: string; leadId?: string; companyId: string };
 
 export const seesOnlyOwnRecords = (session: ScoutSession) => !session.capabilities['records:view_all'];
 
-/**
- * A lead counts as visible when the person owns it or owns work attached to it. Tasks and activities
- * only sync while their lead is loaded, so hiding a linked lead would silently stop their changes saving.
- */
+/** A rep sees their own leads and any lead where they hold an open task. See ownScope for the same rule in SQL. */
 export async function visibleLeadIds(db: D1Database, workspaceId: string, owner: string) {
   const rows = await db.prepare(`SELECT id FROM leads WHERE workspace_id=?1 AND (owner=?2
-    OR id IN (SELECT lead_id FROM tasks WHERE workspace_id=?1 AND owner=?2 AND lead_id IS NOT NULL)
-    OR id IN (SELECT lead_id FROM opportunities WHERE workspace_id=?1 AND owner=?2 AND lead_id IS NOT NULL)
-    OR id IN (SELECT lead_id FROM activities WHERE workspace_id=?1 AND owner=?2 AND lead_id IS NOT NULL))`).bind(workspaceId, owner).all<{ id: string }>();
+    OR id IN (SELECT lead_id FROM tasks WHERE workspace_id=?1 AND owner=?2 AND status!='Completed' AND lead_id IS NOT NULL))`).bind(workspaceId, owner).all<{ id: string }>();
   return new Set(rows.results.map(row => row.id));
 }
 
@@ -25,8 +20,8 @@ export function scopeWorkspace<L extends LeadLike & { companyId?: string }, T ex
   data: { leads: L[]; tasks: T[]; companies: C[]; contacts: P[]; opportunities: O[] }, owner: string, leadIds: Set<string>,
 ) {
   const leads = data.leads.filter(lead => lead.id && leadIds.has(lead.id));
-  const tasks = data.tasks.filter(task => task.owner === owner || (task.leadId && leadIds.has(task.leadId)));
-  const opportunities = data.opportunities.filter(item => item.owner === owner || (item.leadId && leadIds.has(item.leadId)));
+  const tasks = data.tasks.filter(task => (task.leadId ? leadIds.has(task.leadId) : task.owner === owner));
+  const opportunities = data.opportunities.filter(item => (item.leadId ? leadIds.has(item.leadId) : item.owner === owner));
   const companyIds = new Set([...leads.map(lead => lead.companyId), ...opportunities.map(item => item.companyId)].filter(Boolean));
   const companies = data.companies.filter(company => company.owner === owner || companyIds.has(company.id));
   const visibleCompanies = new Set(companies.map(company => company.id));
@@ -34,7 +29,7 @@ export function scopeWorkspace<L extends LeadLike & { companyId?: string }, T ex
 }
 
 export function scopeActivities<A extends LinkedLike>(activities: A[], owner: string, leadIds: Set<string>) {
-  return activities.filter(activity => activity.owner === owner || (activity.leadId && leadIds.has(activity.leadId)));
+  return activities.filter(activity => (activity.leadId ? leadIds.has(activity.leadId) : activity.owner === owner));
 }
 
 const denied = () => Response.json({ error: 'You can only work with your own records.' }, { status: 403 });
@@ -50,8 +45,8 @@ async function companyVisible({ db, session }: Scoped, companyId: string) {
 
 async function linkedVisible({ db, session }: Scoped, table: 'tasks' | 'activities' | 'opportunities', idColumn: 'uid' | 'id', id: string) {
   const row = await db.prepare(`SELECT owner,lead_id FROM ${table} WHERE ${idColumn}=? AND workspace_id=?`).bind(id, session.workspace.id).first<{ owner: string; lead_id: string | null }>();
-  if (!row || row.owner === session.user.name) return true;
-  return row.lead_id ? (await visibleLeadIds(db, session.workspace.id, session.user.name)).has(row.lead_id) : false;
+  if (!row) return true;
+  return row.lead_id ? (await visibleLeadIds(db, session.workspace.id, session.user.name)).has(row.lead_id) : row.owner === session.user.name;
 }
 
 /** Returns a 403 response when someone limited to their own records reaches for another person's. */

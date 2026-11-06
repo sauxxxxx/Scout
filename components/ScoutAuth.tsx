@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import type { PublicBranding } from '@/lib/customization';
+import { ScoutLogo } from '@/components/crm/shared';
 
 type GoogleCredential = { credential: string };
 type GoogleIdentity = {
@@ -8,7 +10,7 @@ type GoogleIdentity = {
   renderButton(element: HTMLElement, options: { type: 'standard'; theme: 'outline'; size: 'large'; shape: 'rectangular'; text: 'continue_with'; logo_alignment: 'left'; width: number }): void;
 };
 
-type Invitation = { status: string; emailHint?: string; workspaceName?: string; inviterName?: string; roleLabel?: string; note?: string };
+type Invitation = { branding?: PublicBranding; status: string; emailHint?: string; workspaceName?: string; inviterName?: string; roleLabel?: string; note?: string };
 
 declare global { interface Window { google?: { accounts: { id: GoogleIdentity } } } }
 
@@ -22,15 +24,18 @@ export function ScoutAuth({ message }: { message?: string }) {
   const [invite, setInvite] = useState<Invitation | null>(null);
   const inviteId = useRef('');
 
+  const [branding, setBranding] = useState<PublicBranding | null>(null);
+  useEffect(() => { if (branding) document.documentElement.dataset.accent = branding.accent; }, [branding]);
+
   useEffect(() => {
-    fetch('/api/auth/config').then(response => response.json() as Promise<{ clientId?: string | null }>).then(data => { setClientId(data.clientId || ''); }).catch(() => setError('Sign-in is temporarily unavailable.')).finally(() => setLoading(false));
+    fetch('/api/auth/config').then(response => response.json() as Promise<{ clientId?: string | null; branding?: PublicBranding | null }>).then(data => { setClientId(data.clientId || ''); if (data.branding) setBranding(current => current || data.branding!); }).catch(() => setError('Sign-in is temporarily unavailable.')).finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get('invite');
     if (!id) return;
     inviteId.current = id;
-    fetch(`/api/auth/invite?id=${encodeURIComponent(id)}`).then(response => response.json() as Promise<Invitation>).then(setInvite).catch(() => setInvite({ status: 'not_found' }));
+    fetch(`/api/auth/invite?id=${encodeURIComponent(id)}`).then(response => response.json() as Promise<Invitation>).then(data => { setInvite(data); if (data.branding) setBranding(data.branding); }).catch(() => setInvite({ status: 'not_found' }));
   }, []);
 
   useEffect(() => {
@@ -65,11 +70,11 @@ export function ScoutAuth({ message }: { message?: string }) {
 
   return <main className="scout-auth-page">
     <section className="scout-auth-card" aria-labelledby="scout-auth-title">
-      <img className="scout-auth-logo" src="/scout-logo.svg" alt="" width="40" height="40" />
+      <ScoutLogo className="scout-auth-logo" logoUrl={branding?.logoUrl} />
       <h1 id="scout-auth-title">{pendingInvite ? `Join ${invite?.workspaceName}` : 'Sign in to Scout'}</h1>
       {pendingInvite
         ? <p>{invite?.inviterName} invited you as {roleName}. Continue with the Google account for <strong>{invite?.emailHint}</strong>.</p>
-        : <p>Scout is invitation-only. Use the Google account your workspace added.</p>}
+        : <p>{branding?.welcomeMessage || 'Scout is invitation-only. Use the Google account your workspace added.'}</p>}
       {pendingInvite && invite?.note && <blockquote className="scout-auth-note">{invite.note}</blockquote>}
       {closedInvite && <div className="scout-auth-error" role="alert">{closedInvite}</div>}
 

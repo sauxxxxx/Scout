@@ -6,9 +6,9 @@ export async function loadWorkspaceSettings(db: D1Database, workspaceId: string)
 }
 
 export async function saveWorkspaceSettings(db: D1Database, workspaceId: string, settings: WorkspaceSettings) {
-  await db.prepare(`INSERT INTO workspace_settings (workspace_id,default_role,sender_name,email_message,allowed_domains_json,admins_can_invite,role_permissions_json,updated_at) VALUES (?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
-    ON CONFLICT(workspace_id) DO UPDATE SET default_role=excluded.default_role,sender_name=excluded.sender_name,email_message=excluded.email_message,allowed_domains_json=excluded.allowed_domains_json,admins_can_invite=excluded.admins_can_invite,role_permissions_json=excluded.role_permissions_json,updated_at=CURRENT_TIMESTAMP`)
-    .bind(workspaceId, settings.defaultRole, settings.senderName, settings.emailMessage, JSON.stringify(settings.allowedDomains), settings.adminsCanInvite ? 1 : 0, JSON.stringify(settings.rolePermissions)).run();
+  await db.prepare(`INSERT INTO workspace_settings (workspace_id,default_role,sender_name,email_message,allowed_domains_json,admins_can_invite,role_permissions_json,customization_json,updated_at) VALUES (?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
+    ON CONFLICT(workspace_id) DO UPDATE SET default_role=excluded.default_role,sender_name=excluded.sender_name,email_message=excluded.email_message,allowed_domains_json=excluded.allowed_domains_json,admins_can_invite=excluded.admins_can_invite,role_permissions_json=excluded.role_permissions_json,customization_json=excluded.customization_json,updated_at=CURRENT_TIMESTAMP`)
+    .bind(workspaceId, settings.defaultRole, settings.senderName, settings.emailMessage, JSON.stringify(settings.allowedDomains), settings.adminsCanInvite ? 1 : 0, JSON.stringify(settings.rolePermissions), JSON.stringify(settings.customization)).run();
 }
 
 export async function loadCustomRoles(db: D1Database, workspaceId: string): Promise<CustomRole[]> {
@@ -64,6 +64,6 @@ export async function listMembers(db: D1Database, workspaceId: string, origin: s
 
 export async function invitationSummary(db: D1Database, id: string) {
   await db.prepare("UPDATE workspace_invitations SET status='expired',updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='pending' AND expires_at<CURRENT_TIMESTAMP").bind(id).run();
-  return db.prepare(`SELECT i.email,i.status,i.role,i.note,w.name workspace_name,u.name inviter_name,r.name custom_role_name FROM workspace_invitations i JOIN workspaces w ON w.id=i.workspace_id LEFT JOIN users u ON u.id=i.invited_by LEFT JOIN workspace_custom_roles r ON r.id=i.custom_role_id WHERE i.id=?`)
-    .bind(id).first<{ email: string; status: string; role: string; note: string; workspace_name: string; inviter_name: string | null; custom_role_name: string | null }>();
+  return db.prepare(`SELECT i.workspace_id,i.email,i.status,i.role,i.note,w.name workspace_name,u.name inviter_name,r.name custom_role_name FROM workspace_invitations i JOIN workspaces w ON w.id=i.workspace_id LEFT JOIN users u ON u.id=i.invited_by LEFT JOIN workspace_custom_roles r ON r.id=i.custom_role_id WHERE i.id=?`)
+    .bind(id).first<{ workspace_id: string; email: string; status: string; role: string; note: string; workspace_name: string; inviter_name: string | null; custom_role_name: string | null }>();
 }

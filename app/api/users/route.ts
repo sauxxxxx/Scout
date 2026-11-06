@@ -1,4 +1,5 @@
 import { authenticateRequest } from '@/lib/auth';
+import { accentHex } from '@/lib/customization';
 import { canAssignRole, canChangeRole, type WorkspaceRole } from '@/lib/permissions';
 import { recordAudit } from '@/lib/audit';
 import { allowRequest, tooManyRequests } from '@/lib/rate-limit';
@@ -32,6 +33,8 @@ async function deliver(auth: Authenticated, invite: { to: string; name: string; 
       note: invite.note,
       workspaceMessage: settings.emailMessage,
       senderName: settings.senderName,
+      accentHex: accentHex[settings.customization.accent],
+      logoUrl: settings.customization.logoUrl,
     });
     return email.delivered ? 'sent' : 'manual';
   } catch {

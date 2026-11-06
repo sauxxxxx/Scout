@@ -1,4 +1,5 @@
 import type { CapabilitySet, WorkspacePermission, WorkspaceRole } from '@/lib/permissions';
+import type { Customization } from '@/lib/customization';
 import { canInviteMembers, permissionAllowed, resolveCapabilities } from '@/lib/permissions';
 import { env } from 'cloudflare:workers';
 import { recordAudit } from '@/lib/audit';
@@ -17,6 +18,7 @@ export type ScoutSession = {
   customRole?: { id: string; name: string };
   capabilities: CapabilitySet;
   canInvite: boolean;
+  customization: Customization;
   localDevelopment: boolean;
 };
 
@@ -141,6 +143,7 @@ export async function authenticateRequest(request: Request, permission: Workspac
       customRole: customRole ? { id: customRole.id, name: customRole.name } : undefined,
       capabilities,
       canInvite,
+      customization: settings.customization,
       localDevelopment: identity.localDevelopment,
     },
   };
