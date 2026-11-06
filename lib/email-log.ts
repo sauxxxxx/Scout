@@ -1,7 +1,7 @@
 import { markLeadChanged, refreshLeadTouch } from '@/lib/lead-touch-store';
 
 const MAX_RECIPIENTS = 20;
-const tokenPattern = /^log-([a-f0-9]{32})@/;
+const tokenPattern = /^log+([a-f0-9]{32})@/;
 const emailPattern = /[a-z0-9._%+'-]+@[a-z0-9.-]+\.[a-z]{2,}/g;
 
 export const validEmailLogDomain = (domain?: string) => {
@@ -9,12 +9,15 @@ export const validEmailLogDomain = (domain?: string) => {
   return value && /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(value) ? value : null;
 };
 
-/** Each rep has their own private address, so a copy shows who sent the email without trusting the message itself. */
+/**
+ * Each rep has their own private address, so a copy shows who sent the email without trusting the message itself.
+ * Plus addressing means one Cloudflare rule for log@ receives them all, without taking over the domain's other mail.
+ */
 export async function emailLogAddress(db: D1Database, workspaceId: string, userId: string, domain: string) {
   await db.prepare('INSERT INTO email_log_tokens (token,workspace_id,user_id) VALUES (?,?,?) ON CONFLICT(workspace_id,user_id) DO NOTHING')
     .bind(crypto.randomUUID().replaceAll('-', ''), workspaceId, userId).run();
   const row = await db.prepare('SELECT token FROM email_log_tokens WHERE workspace_id=? AND user_id=?').bind(workspaceId, userId).first<{ token: string }>();
-  return `log-${row!.token}@${domain}`;
+  return `log+${row!.token}@${domain}`;
 }
 
 export function recipientsOf(...headers: (string | null | undefined)[]) {
