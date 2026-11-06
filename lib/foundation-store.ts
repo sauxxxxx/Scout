@@ -6,7 +6,7 @@ import { FINDER_DEFAULT_LEADS } from '@/lib/finder-cells';
 export const DEFAULT_WORKSPACE_ID = 'scout-default';
 
 /** Bump when anything in migrateFoundationSchema changes. Requests then skip the whole setup unless this moved. */
-export const SCHEMA_VERSION = 19;
+export const SCHEMA_VERSION = 20;
 
 const createUsersTable = `CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
@@ -153,6 +153,7 @@ async function ensureOnce(db: D1Database) {
   await migrateFoundationSchema(db);
   if (Number(meta?.version || 0) < 17) await migrateSalesWorkflow(db);
   if (Number(meta?.version || 0) < 19) await migrateReportDates(db);
+  if (Number(meta?.version || 0) < 20) await migrateEmailLog(db);
   await db.prepare('INSERT INTO schema_meta (id,version) VALUES (1,?) ON CONFLICT(id) DO UPDATE SET version=excluded.version,updated_at=CURRENT_TIMESTAMP').bind(SCHEMA_VERSION).run();
 }
 
@@ -184,6 +185,14 @@ async function rebuildLeadsKey(db: D1Database) {
 }
 
 /** Runs once. Older records never stored these dates, so their last update is the closest record of when they happened. */
+async function migrateEmailLog(db: D1Database) {
+  await addColumns(db, 'activities', { external_ref: 'TEXT' });
+  await db.batch([
+    db.prepare(`CREATE TABLE IF NOT EXISTS email_log_tokens (token TEXT PRIMARY KEY,workspace_id TEXT NOT NULL,user_id TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(workspace_id,user_id))`),
+    db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_activities_external_ref ON activities(workspace_id,external_ref) WHERE external_ref IS NOT NULL'),
+  ]);
+}
+
 async function migrateReportDates(db: D1Database) {
   await db.batch([
     db.prepare("UPDATE tasks SET completed_at=updated_at WHERE completed_at IS NULL AND status='Completed'"),

@@ -2,6 +2,8 @@ import app from 'vinext/server/app-router-entry';
 import { processFinderMessage, type FinderJobMessage } from '@/lib/finder-store';
 import { reportFailure, type AlertEnv } from '@/lib/alerts';
 import { finderRuntimeConfig, type FinderEnv } from '@/lib/finder-runtime';
+import { logSentEmail } from '@/lib/email-log';
+import { ensureFoundationSchema } from '@/lib/foundation-store';
 
 type CloudflareAccessIdentity = {
   email?: string;
@@ -128,6 +130,15 @@ const worker = {
     } catch (error) {
       ctx.waitUntil(reportFailure(env as unknown as AlertEnv, { event: 'request_crashed', path, message: error instanceof Error ? error.message : 'unknown' }));
       return withSecurityHeaders(Response.json({ error: 'Something went wrong. Try again.' }, { status: 500 }));
+    }
+  },
+  /** The BCC copy of a rep's email. Only the headers are read, and the message is not kept. */
+  async email(message: ForwardableEmailMessage, env: FinderEnv) {
+    try {
+      await ensureFoundationSchema(env.DB);
+      await logSentEmail(env.DB, { address: message.to, to: message.headers.get('to'), cc: message.headers.get('cc'), subject: message.headers.get('subject'), messageId: message.headers.get('message-id') });
+    } catch (error) {
+      await reportFailure(env as unknown as AlertEnv, { event: 'email_log_failed', message: error instanceof Error ? error.message.slice(0, 400) : 'Email log failed.' });
     }
   },
   async queue(batch: MessageBatch<FinderJobMessage>, env: FinderEnv) {

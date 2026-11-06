@@ -5,6 +5,7 @@ export type FinderEnv = {
   FINDER_QUEUE?: Queue<FinderJobMessage>;
   AUTH_PROVIDER?: 'cloudflare-access' | 'openai-sites' | 'scout';
   CLOUDFLARE_ACCESS_TEAM_DOMAIN?: string;
+  EMAIL_LOG_DOMAIN?: string;
   GOOGLE_OAUTH_CLIENT_ID?: string;
   GOOGLE_PLACES_API_KEY?: string;
   GEMINI_API_KEY?: string;

@@ -10,13 +10,14 @@ export type WorkspaceMember = {
   invitationId?: string; expiresAt?: string; lastSeenAt?: string; customRoleId?: string; customRoleName?: string;
   delivery?: 'sent' | 'manual' | 'failed'; lastSentAt?: string; note?: string; inviteUrl?: string;
 };
-type Session = { user: { id: string; email: string; name: string; avatarUrl?: string }; role: WorkspaceRole; capabilities?: CapabilitySet; canInvite?: boolean };
+type Session = { emailLogAddress?: string; user: { id: string; email: string; name: string; avatarUrl?: string }; role: WorkspaceRole; capabilities?: CapabilitySet; canInvite?: boolean };
 type MembersContext = {
   members: WorkspaceMember[];
   people: Map<string, PersonLook>;
   assignableMembers: WorkspaceMember[];
   currentMember?: WorkspaceMember;
   defaultOwner?: WorkspaceMember;
+  emailLogAddress?: string;
   currentRole: WorkspaceRole;
   capabilities: CapabilitySet;
   canInvite: boolean;
@@ -46,7 +47,7 @@ export function WorkspaceMembersProvider({ session, children, preferredOwner = '
   const assignableMembers = useMemo(() => members.filter(member => !member.pending && member.status !== 'disabled' && member.role !== 'viewer'), [members]);
   const currentMember = members.find(member => member.id === session.user.id) || fallback;
   const defaultOwner = ['owner', 'admin'].includes(session.role) ? assignableMembers.find(member => member.id === preferredOwner) || currentMember : currentMember;
-  return <Context.Provider value={{ members, people, assignableMembers, currentMember, defaultOwner, currentRole: session.role, capabilities: session.capabilities || allCapabilities, canInvite: Boolean(session.canInvite), loading, refresh, replaceMembers: setMembers }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ members, people, assignableMembers, currentMember, defaultOwner, emailLogAddress: session.emailLogAddress, currentRole: session.role, capabilities: session.capabilities || allCapabilities, canInvite: Boolean(session.canInvite), loading, refresh, replaceMembers: setMembers }}>{children}</Context.Provider>;
 }
 
 export function useWorkspaceMembers() {

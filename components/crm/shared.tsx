@@ -115,8 +115,8 @@ export function useNow(intervalMs=30000){
 
 /** Opens Gmail with the address filled in. Phones keep the normal mail link, because Gmail's web compose page is unreliable there. */
 export function EmailLink({email,className,children}:{email:string;className?:string;children?:React.ReactNode}){
-  const {currentMember}=useWorkspaceMembers();
-  return <a className={className} href={gmailComposeUrl(email,currentMember?.email)} target="_blank" rel="noreferrer" onClick={event=>{event.stopPropagation();if(window.matchMedia('(pointer:coarse)').matches){event.preventDefault();window.location.href=`mailto:${email}`;return}if(event.ctrlKey||event.metaKey||event.shiftKey)return;const compose=window.open(event.currentTarget.href,'_blank',composeWindowFeatures(window.screen as Screen&{availLeft?:number;availTop?:number}));if(compose){compose.opener=null;event.preventDefault()}}}>{children||email}</a>;
+  const {currentMember,emailLogAddress}=useWorkspaceMembers();
+  return <a className={className} href={gmailComposeUrl(email,currentMember?.email,emailLogAddress)} target="_blank" rel="noreferrer" onClick={event=>{event.stopPropagation();if(window.matchMedia('(pointer:coarse)').matches){event.preventDefault();window.location.href=`mailto:${email}${emailLogAddress?`?bcc=${encodeURIComponent(emailLogAddress)}`:''}`;return}if(event.ctrlKey||event.metaKey||event.shiftKey)return;const compose=window.open(event.currentTarget.href,'_blank',composeWindowFeatures(window.screen as Screen&{availLeft?:number;availTop?:number}));if(compose){compose.opener=null;event.preventDefault()}}}>{children||email}</a>;
 }
 
 export function ScoutLogo({className='',logoUrl}:{className?:string;logoUrl?:string}){

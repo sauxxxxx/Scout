@@ -5,7 +5,7 @@ export type Page = 'Overview' | 'Leads' | 'Finder' | 'Pipeline' | 'Tasks' | 'Act
 
 export type WorkspaceRole = 'owner' | 'admin' | 'member' | 'viewer';
 
-export type Session = {customization?:import('@/lib/customization').Customization;user:{id:string;email:string;name:string;avatarUrl?:string};workspace:{id:string;name:string};workspaces?:{id:string;name:string}[];timezone?:string;role:WorkspaceRole;customRole?:{id:string;name:string};capabilities?:CapabilitySet;canInvite?:boolean;localDevelopment?:boolean};
+export type Session = {emailLogAddress?:string;customization?:import('@/lib/customization').Customization;user:{id:string;email:string;name:string;avatarUrl?:string};workspace:{id:string;name:string};workspaces?:{id:string;name:string}[];timezone?:string;role:WorkspaceRole;customRole?:{id:string;name:string};capabilities?:CapabilitySet;canInvite?:boolean;localDevelopment?:boolean};
 
 export type FacebookResearch=Partial<import('@/lib/finder-sales').FacebookResearch>;
 

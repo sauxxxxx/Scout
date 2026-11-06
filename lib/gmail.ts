@@ -1,7 +1,9 @@
 /** Opens Gmail's compose window. `account` keeps reps with several Google accounts on the one they use for Scout. */
-export function gmailComposeUrl(to: string, account?: string) {
+export function gmailComposeUrl(to: string, account?: string, bcc?: string) {
   const params = new URLSearchParams({ view: 'cm', fs: '1', to });
   if (account && !account.endsWith('@local.scout')) params.set('authuser', account);
+  // Scout gets a copy only if the email is really sent, which is how sent emails are counted.
+  if (bcc) params.set('bcc', bcc);
   return `https://mail.google.com/mail/?${params.toString()}`;
 }
 

@@ -103,6 +103,20 @@ After saving changes, close any failed Google popup and retry **Open in Google S
 
 The access token stays in the browser and is never sent to Scout's server.
 
+## Email tracking
+
+Scout can't see inside Gmail, so it counts sent emails with a hidden BCC. Clicking a lead's email opens Gmail with a private address for that rep in the BCC line. Gmail only delivers to that address if the email is actually sent, and Scout then logs it on the lead. It reads the To, Cc, Subject and Message-ID headers only: the body is never read or stored.
+
+It stays off until `EMAIL_LOG_DOMAIN` is set. To turn it on:
+
+1. Use a domain or subdomain on Cloudflare that doesn't handle other email, such as `mail.yourcompany.com`. Email Routing takes over that domain's incoming mail.
+2. In the Cloudflare dashboard, open the domain, then **Email**, then **Email Routing**, and enable it. Add the DNS records it offers.
+3. Under **Routing rules**, set **Catch-all address** to **Send to a Worker** and pick the `scout` Worker. This needs Scout deployed as a Worker: a Cloudflare Pages project can't receive email.
+4. Add `EMAIL_LOG_DOMAIN=mail.yourcompany.com` to the Worker's variables and deploy.
+5. Send a test email from a lead to an address you own, and check it appears on the lead within a minute.
+
+Reps can delete the BCC line, and those emails won't be counted. Emails written directly in Gmail aren't counted either, unless the rep adds their tracking address by hand.
+
 ## Finder search size
 
 Google returns only its most relevant matches per search, so Scout splits the area into smaller parts until it reaches the lead count. `finderRequestLimit` in `lib/finder-cells.ts` caps the billed requests per search: 24 for 100 leads. Businesses a workspace has been shown are remembered for 90 days in `finder_seen_places` and left out of later searches.
