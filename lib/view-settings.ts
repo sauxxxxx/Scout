@@ -24,6 +24,7 @@ export const viewSettingsSchema = z.object({
   leadColumns: z.array(z.object({ key: z.enum(leadColumnKeys), visible: z.boolean() }).strict()).max(leadColumnKeys.length),
   overviewSections: z.array(z.object({ key: z.enum(overviewSectionKeys), visible: z.boolean() }).strict()).max(overviewSectionKeys.length),
   savedFilters: z.array(savedFilterSchema).max(20),
+  leadPageSize: z.union([z.literal(25), z.literal(50), z.literal(100)]),
 });
 export type ViewSettings = z.infer<typeof viewSettingsSchema>;
 
@@ -31,6 +32,7 @@ export const defaultViewSettings: ViewSettings = {
   leadColumns: leadColumnKeys.map(key => ({ key, visible: !['priority', 'city', 'phone', 'email'].includes(key) })),
   overviewSections: overviewSectionKeys.map(key => ({ key, visible: true })),
   savedFilters: [],
+  leadPageSize: 25,
 };
 
 /** Anything added to Scout later joins the end of a saved list, so older settings keep working. */

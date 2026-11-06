@@ -2,12 +2,13 @@
 
 import { useLayoutEffect, useMemo, useRef, useState, createContext, useCallback, useContext, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { FiCheck, FiChevronDown, FiFlag } from 'react-icons/fi';
+import { FiCheck, FiChevronDown, FiChevronLeft, FiChevronRight, FiFlag } from 'react-icons/fi';
 import { defaultCustomization, statusLabelOf, type Customization } from '@/lib/customization';
 import { defaultViewSettings, type ViewSettings } from '@/lib/view-settings';
 import { localIso } from '@/lib/task-dates';
 import { useWorkspaceMembers } from '@/components/WorkspaceMembers';
 import { composeWindowFeatures, gmailComposeUrl } from '@/lib/gmail';
+import { pageNumbers, pageSizes, type PageSize } from '@/lib/pagination';
 import { toneFromName } from '@/lib/person-tone';
 import type { Page, TaskItem, FloatingMenuPosition } from '@/lib/crm-types';
 
@@ -157,4 +158,17 @@ export function ToolMenu({label,icon,children,disabled,active}:{label:string;ico
   const [open,setOpen]=useState(false);const wrap=useRef<HTMLDivElement>(null);
   useEffect(()=>{if(!open)return;const dismiss=(event:PointerEvent)=>{if(!wrap.current?.contains(event.target as Node))setOpen(false)};const escape=(event:KeyboardEvent)=>{if(event.key==='Escape')setOpen(false)};document.addEventListener('pointerdown',dismiss);document.addEventListener('keydown',escape);return()=>{document.removeEventListener('pointerdown',dismiss);document.removeEventListener('keydown',escape)}},[open]);
   return <div className="tool-menu" ref={wrap}><button className={`secondary${active?' active':''}`} disabled={disabled} aria-expanded={open} onClick={()=>setOpen(value=>!value)}>{icon}{label}</button>{open&&<div className="tool-menu-panel">{children(()=>setOpen(false))}</div>}</div>;
+}
+
+export function TablePager({page,last,from,to,total,pageSize,noun,onPage,onPageSize}:{page:number;last:number;from:number;to:number;total:number;pageSize:PageSize;noun:string;onPage:(page:number)=>void;onPageSize:(size:PageSize)=>void}){
+  return <nav className="table-pager" aria-label={`${noun} pages`}>
+    <span aria-live="polite">{from===to?from:`${from}–${to}`} of {total}</span>
+    <div className="table-pager-size"><span>Rows per page</span><CustomSelect value={String(pageSize)} options={pageSizes.map(String)} onChange={value=>onPageSize(Number(value) as PageSize)}/></div>
+    <div className="table-pager-pages">
+      <button aria-label="Previous page" disabled={page<=1} onClick={()=>onPage(page-1)}><FiChevronLeft/></button>
+      {pageNumbers(page,last).map((item,index)=>item==='gap'?<span className="table-pager-gap" key={`gap-${index}`}>…</span>:<button className={item===page?'active':''} aria-label={`Page ${item}`} aria-current={item===page?'page':undefined} onClick={()=>onPage(item)} key={item}>{item}</button>)}
+      <small>Page {page} of {last}</small>
+      <button aria-label="Next page" disabled={page>=last} onClick={()=>onPage(page+1)}><FiChevronRight/></button>
+    </div>
+  </nav>;
 }

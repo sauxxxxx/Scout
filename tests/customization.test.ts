@@ -4,6 +4,7 @@ import { accentColors, accentHex, customizationSchema, defaultCustomization, def
 import { composeWindowFeatures } from '@/lib/gmail';
 import { inkKeyframes } from '@/lib/ink-spread';
 import { sendInvitationEmail } from '@/lib/invitation-email';
+import { pageNumbers, pageWindow } from '@/lib/pagination';
 import { peopleLooks, PERSON_TONES, toneFromName } from '@/lib/person-tone';
 import { parseWorkspaceSettings, workspaceSettingsSchema } from '@/lib/team';
 import { defaultViewSettings, moved, normalizeViewSettings, parseViewSettings, viewSettingsSchema } from '@/lib/view-settings';
@@ -267,5 +268,37 @@ describe('Gmail compose window', () => {
 
   it('never runs past a small screen', () => {
     expect(composeWindowFeatures({ availWidth: 600, availHeight: 500 })).toBe('popup=yes,width=600,height=500,left=0,top=0');
+  });
+});
+
+describe('table pages', () => {
+  it('shows every page when there are only a few', () => {
+    expect(pageNumbers(1, 1)).toEqual([1]);
+    expect(pageNumbers(2, 5)).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it('skips the middle of a long list, and never hides a single page behind a gap', () => {
+    expect(pageNumbers(1, 20)).toEqual([1, 2, 'gap', 20]);
+    expect(pageNumbers(10, 20)).toEqual([1, 'gap', 9, 10, 11, 'gap', 20]);
+    expect(pageNumbers(20, 20)).toEqual([1, 'gap', 19, 20]);
+    expect(pageNumbers(3, 20)).toEqual([1, 2, 3, 4, 'gap', 20]);
+  });
+
+  it('works out which rows a page holds', () => {
+    expect(pageWindow(101, 25, 1)).toEqual({ page: 1, last: 5, start: 0, end: 25, from: 1, to: 25 });
+    expect(pageWindow(101, 25, 5)).toEqual({ page: 5, last: 5, start: 100, end: 125, from: 101, to: 101 });
+  });
+
+  it('falls back to the last page when the list gets shorter', () => {
+    expect(pageWindow(30, 25, 9).page).toBe(2);
+  });
+
+  it('copes with an empty list', () => {
+    expect(pageWindow(0, 25, 1)).toEqual({ page: 1, last: 1, start: 0, end: 25, from: 0, to: 0 });
+  });
+
+  it('defaults to 25 rows, and keeps that for older saved settings', () => {
+    expect(parseViewSettings('{"savedFilters":[]}').leadPageSize).toBe(25);
+    expect(viewSettingsSchema.safeParse({ ...defaultViewSettings, leadPageSize: 7 }).success).toBe(false);
   });
 });
