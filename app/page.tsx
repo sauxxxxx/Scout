@@ -98,7 +98,7 @@ export default function Home() {
   const mergeContacts=useCallback((rows:Contact[])=>{setContacts(value=>mergeRecords(value,rows,contact=>contact.id))},[]);
   const crmData=useMemo<CrmData>(()=>{
     const query=(params:Record<string,string>)=>new URLSearchParams(Object.entries(params).filter(([,value])=>value)).toString();
-    const loadLeads=async(params:Record<string,string>)=>{const response=await fetch(`/api/leads?${query(params)}`);if(!response.ok)return null;const data=await response.json() as {leads:Lead[];total:number;stats:{active:number;attention:number;proposals:number};industries:string[]};mergeLeads(data.leads);return data};
+    const loadLeads=async(params:Record<string,string>)=>{const response=await fetch(`/api/leads?${query(params)}`);if(!response.ok)return null;const data=await response.json() as {leads:Lead[];total:number;stats:{active:number;attention:number;proposals:number};industries:string[];countries:string[]};mergeLeads(data.leads);return data};
     return {
       undoable:(message,undo)=>{setToast(message);setToastUndo(()=>undo);window.setTimeout(()=>{setToast('');setToastUndo(null)},7000)},
       loadLeads,

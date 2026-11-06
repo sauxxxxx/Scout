@@ -15,7 +15,7 @@ export type Contact={id:string;version:number;companyId:string;name:string;title
 
 export type Opportunity={fromFinder?:boolean;id:string;version:number;companyId:string;leadId?:string;primaryContactId?:string;name:string;stage:string;value:number;probability:number;closeDate?:string;owner:string;priority:string;outcome?:string;archived:boolean;closedAt?:string};
 
-export type Lead = { id?:string; createdAt?:string; version?:number; companyId?:string;primaryContactId?:string; name:string; industry:string; city:string; status:string; score:number; owner:string; last:string; lastTouchAt?:string; changedAt?:string; next:string; phone:string; email:string; contact:string; priority:string; opportunity:string; value?:number; probability?:number; closeDate?:string; archived?:boolean };
+export type Lead = { id?:string; createdAt?:string; version?:number; companyId?:string;primaryContactId?:string; name:string; industry:string; city:string; country?:string; status:string; score:number; owner:string; last:string; lastTouchAt?:string; changedAt?:string; next:string; phone:string; email:string; contact:string; priority:string; opportunity:string; value?:number; probability?:number; closeDate?:string; archived?:boolean };
 
 export type ActivityEntry = { uid?:string; id:number; version?:number; lead:string; leadId?:string;companyId?:string;contactId?:string;opportunityId?:string; type:string; detail:string; time:string; owner:string; status?:'Completed'|'Scheduled'; occurredAt?:string; outcome?:string; duration?:string; subject?:string; value?:string; documentLink?:string; attachmentKey?:string; attachmentName?:string; relatedTaskId?:number; relatedTaskUid?:string; opportunity?:string; deletedAt?:string };
 

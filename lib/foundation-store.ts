@@ -6,7 +6,7 @@ import { FINDER_DEFAULT_LEADS } from '@/lib/finder-cells';
 export const DEFAULT_WORKSPACE_ID = 'scout-default';
 
 /** Bump when anything in migrateFoundationSchema changes. Requests then skip the whole setup unless this moved. */
-export const SCHEMA_VERSION = 20;
+export const SCHEMA_VERSION = 21;
 
 const createUsersTable = `CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
@@ -284,7 +284,7 @@ async function migrateFoundationSchema(db: D1Database) {
 
   await addColumns(db, 'leads', {
     id: 'TEXT', workspace_id: 'TEXT', company_id: 'TEXT', primary_contact_id: 'TEXT', version: 'INTEGER NOT NULL DEFAULT 1', created_at: 'TEXT',
-    finder_provider: 'TEXT', finder_record_id: 'TEXT', business_address: "TEXT NOT NULL DEFAULT ''", last_touch_at: 'TEXT', changed_at: 'TEXT',
+    finder_provider: 'TEXT', finder_record_id: 'TEXT', business_address: "TEXT NOT NULL DEFAULT ''", country: "TEXT NOT NULL DEFAULT 'PH'", last_touch_at: 'TEXT', changed_at: 'TEXT',
   });
   await addColumns(db, 'opportunities', { closed_at: 'TEXT', proposal_at: 'TEXT' });
   await addColumns(db, 'tasks', {
@@ -298,7 +298,7 @@ async function migrateFoundationSchema(db: D1Database) {
     finder_provider: 'TEXT', finder_record_id: 'TEXT', business_address: "TEXT NOT NULL DEFAULT ''",
   });
   await addColumns(db, 'finder_searches', {
-    map_bounds_json: 'TEXT', map_area_json: 'TEXT', location_code: 'TEXT', location_type: 'TEXT', location_province: 'TEXT', location_region: 'TEXT', industry_type: 'TEXT', industry_psic_code: 'TEXT',
+    country: "TEXT NOT NULL DEFAULT 'PH'", map_bounds_json: 'TEXT', map_area_json: 'TEXT', location_code: 'TEXT', location_type: 'TEXT', location_province: 'TEXT', location_region: 'TEXT', industry_type: 'TEXT', industry_psic_code: 'TEXT',
     sales_focus: "TEXT NOT NULL DEFAULT 'Website & booking'", requirement_mode: "TEXT NOT NULL DEFAULT 'all'",
     hidden_found_count: 'INTEGER NOT NULL DEFAULT 0', include_found: 'INTEGER NOT NULL DEFAULT 0', search_state_json: 'TEXT', coverage: 'TEXT',
   });

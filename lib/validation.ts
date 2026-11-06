@@ -1,4 +1,5 @@
 import { FINDER_MAX_LEADS } from '@/lib/finder-cells';
+import { isCountry } from '@/lib/countries';
 import { z } from 'zod';
 import { finderAreaSchema, finderBoundsSchema } from '@/lib/finder-map';
 import { facebookResearchSchema, normalizeFacebookPageUrl, salesFocuses } from '@/lib/finder-sales';
@@ -31,6 +32,7 @@ export const leadInputSchema = z.object({
   probability: z.number().int().min(0).max(100).optional(),
   closeDate: optionalText,
   archived: z.boolean().optional(),
+  country: z.string().refine(isCountry, 'Choose a country.').optional(),
   createdAt: optionalText,
   lastTouchAt: optionalText,
   changedAt: optionalText,
@@ -121,6 +123,7 @@ export const finderSearchSchema = z.object({
   industry: z.string().trim().min(2).max(120).optional(),
   industryType: z.string().trim().max(120).optional(),
   industryPsicCode: z.string().trim().max(30).optional(),
+  country: z.string().refine(isCountry, 'Choose a country.').optional(),
   location: z.string().trim().min(2).max(160).optional(),
   locationCode: z.string().trim().max(30).optional(),
   locationType: z.string().trim().max(50).optional(),

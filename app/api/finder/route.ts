@@ -1,4 +1,5 @@
 import { env, waitUntil } from 'cloudflare:workers';
+import { DEFAULT_COUNTRY } from '@/lib/countries';
 import { authenticateRequest, type ScoutSession } from '@/lib/auth';
 import { mapFinderResult, mapFinderSearch, processFinderMessage, type FinderJobMessage } from '@/lib/finder-store';
 import { finderRuntimeConfig, type FinderEnv } from '@/lib/finder-runtime';
@@ -132,8 +133,8 @@ export async function POST(request: Request) {
     id = crypto.randomUUID();
     const status = input.action === 'save' ? 'Saved' : 'Queued';
     const name = `${input.location} ${input.industry}`.trim();
-    await auth.db.prepare(`INSERT INTO finder_searches (id,workspace_id,created_by,name,industry,industry_type,industry_psic_code,location,location_code,location_type,location_province,location_region,target_count,requirements_json,status,progress,stage,saved,map_area_json,map_bounds_json,sales_focus,requirement_mode)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(id, auth.session.workspace.id, auth.session.user.id, name, input.industry, input.industryType || null, input.industryPsicCode || null, input.location, input.locationCode || null, input.locationType || null, input.locationProvince || null, input.locationRegion || null, input.targetCount, JSON.stringify((input.requirements || []).map(item => item === 'Social' ? 'Facebook' : item)), status, status === 'Queued' ? 2 : 0, status === 'Queued' ? 'Queued' : 'Ready', input.action === 'save' ? 1 : 0, input.area ? JSON.stringify(input.area) : null, input.bounds ? JSON.stringify(input.bounds) : null, input.salesFocus, input.requirementMode).run();
+    await auth.db.prepare(`INSERT INTO finder_searches (id,workspace_id,created_by,name,industry,industry_type,industry_psic_code,location,location_code,location_type,location_province,location_region,target_count,requirements_json,status,progress,stage,saved,map_area_json,map_bounds_json,sales_focus,requirement_mode,country)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(id, auth.session.workspace.id, auth.session.user.id, name, input.industry, input.industryType || null, input.industryPsicCode || null, input.location, input.locationCode || null, input.locationType || null, input.locationProvince || null, input.locationRegion || null, input.targetCount, JSON.stringify((input.requirements || []).map(item => item === 'Social' ? 'Facebook' : item)), status, status === 'Queued' ? 2 : 0, status === 'Queued' ? 'Queued' : 'Ready', input.action === 'save' ? 1 : 0, input.area ? JSON.stringify(input.area) : null, input.bounds ? JSON.stringify(input.bounds) : null, input.salesFocus, input.requirementMode, input.country || DEFAULT_COUNTRY).run();
   }
   if (input.includeFound) await auth.db.prepare('UPDATE finder_searches SET include_found=1 WHERE id=? AND workspace_id=?').bind(id, auth.session.workspace.id).run();
   const payload = await finderPayload(auth.db, auth.session.workspace.id, id, ownName(auth.session));

@@ -1,4 +1,5 @@
 import { authenticateRequest } from '@/lib/auth';
+import { DEFAULT_COUNTRY } from '@/lib/countries';
 import { buildLeadFilter, leadColumns, leadJoins, leadOrder, pageParams } from '@/lib/lead-query';
 import { seesOnlyOwnRecords } from '@/lib/record-scope';
 import { mapLead } from '@/lib/workspace-store';
@@ -28,11 +29,12 @@ export async function GET(request: Request) {
   const ownOnly = seesOnlyOwnRecords(session);
   const { where, values } = buildLeadFilter(params, workspaceId, session.user.name, ownOnly);
   const scope = buildLeadFilter(new URLSearchParams(), workspaceId, session.user.name, ownOnly);
-  const [rows, count, stats, industries] = await db.batch([
+  const [rows, count, stats, industries, countries] = await db.batch([
     db.prepare(`SELECT ${leadColumns} ${leadJoins} WHERE ${where} ORDER BY ${leadOrder(params)} LIMIT ? OFFSET ?`).bind(...values, pageSize, offset),
     db.prepare(`SELECT COUNT(*) total ${leadJoins} WHERE ${where}`).bind(...values),
     db.prepare(`SELECT SUM(CASE WHEN leads.status NOT IN ('Won','Lost') THEN 1 ELSE 0 END) active,SUM(CASE WHEN leads.priority='High' THEN 1 ELSE 0 END) attention,SUM(CASE WHEN leads.status='Proposal' THEN 1 ELSE 0 END) proposals ${leadJoins} WHERE ${scope.where}`).bind(...scope.values),
     db.prepare(`SELECT DISTINCT leads.industry industry ${leadJoins} WHERE ${scope.where} ORDER BY 1 LIMIT 300`).bind(...scope.values),
+    db.prepare(`SELECT DISTINCT leads.country country ${leadJoins} WHERE ${scope.where}`).bind(...scope.values),
   ]);
   const summary = stats.results[0] as { active: number | null; attention: number | null; proposals: number | null } | undefined;
   return Response.json({
@@ -40,6 +42,7 @@ export async function GET(request: Request) {
     total: Number((count.results[0] as { total: number } | undefined)?.total || 0), page, pageSize,
     stats: { active: Number(summary?.active || 0), attention: Number(summary?.attention || 0), proposals: Number(summary?.proposals || 0) },
     industries: (industries.results as { industry: string }[]).map(row => row.industry).filter(Boolean),
+    countries: (countries.results as { country: string }[]).map(row => row.country).filter(Boolean),
   });
 }
 
@@ -51,9 +54,9 @@ export async function POST(request: Request) {
   const lead = parsed.data;
   const id = lead.id || crypto.randomUUID();
   try {
-    await auth.db.prepare(`INSERT INTO leads (id,workspace_id,company_id,primary_contact_id,version,name,industry,city,status,score,owner,last,next,phone,email,contact,priority,opportunity,value,probability,close_date,archived,created_at,updated_at,changed_at)
-      VALUES (?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`)
-      .bind(id, auth.session.workspace.id, lead.companyId??null,lead.primaryContactId??null,lead.name, lead.industry, lead.city, lead.status, lead.score, lead.owner, lead.last, lead.next, lead.phone, lead.email, lead.contact, lead.priority, lead.opportunity, lead.value ?? null, lead.probability ?? null, lead.closeDate ?? null, lead.archived ? 1 : 0).run();
+    await auth.db.prepare(`INSERT INTO leads (country,id,workspace_id,company_id,primary_contact_id,version,name,industry,city,status,score,owner,last,next,phone,email,contact,priority,opportunity,value,probability,close_date,archived,created_at,updated_at,changed_at)
+      VALUES (?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`)
+      .bind(lead.country || DEFAULT_COUNTRY, id, auth.session.workspace.id, lead.companyId??null,lead.primaryContactId??null,lead.name, lead.industry, lead.city, lead.status, lead.score, lead.owner, lead.last, lead.next, lead.phone, lead.email, lead.contact, lead.priority, lead.opportunity, lead.value ?? null, lead.probability ?? null, lead.closeDate ?? null, lead.archived ? 1 : 0).run();
   } catch {
     return Response.json({ error: 'A lead with this name or ID already exists.' }, { status: 409 });
   }
@@ -74,9 +77,9 @@ export async function PATCH(request: Request) {
   // Compared with what the screen shows, because the name, city and contact can come from the linked company.
   const stored = await auth.db.prepare(`SELECT ${leadColumns} ${leadJoins} WHERE leads.id=? AND leads.workspace_id=?`).bind(lead.id, auth.session.workspace.id).first<Record<string, unknown>>();
   const before = stored ? mapLead(stored) : null;
-  const changed = detailsChanged(before ? { ...before, archived: !!before.archived } : null, { ...lead, archived: !!lead.archived }, leadDetails);
-  const result = await auth.db.prepare(`UPDATE leads SET company_id=COALESCE(?,company_id),primary_contact_id=COALESCE(?,primary_contact_id),name=?,industry=?,city=?,status=?,score=?,owner=?,last=?,next=?,phone=?,email=?,contact=?,priority=?,opportunity=?,value=?,probability=?,close_date=?,archived=?,changed_at=CASE WHEN ?=1 THEN CURRENT_TIMESTAMP ELSE COALESCE(changed_at,updated_at) END,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND version=?`)
-    .bind(lead.companyId??null,lead.primaryContactId??null,lead.name, lead.industry, lead.city, lead.status, lead.score, lead.owner, lead.last, lead.next, lead.phone, lead.email, lead.contact, lead.priority, lead.opportunity, lead.value ?? null, lead.probability ?? null, lead.closeDate ?? null, lead.archived ? 1 : 0, changed ? 1 : 0, lead.id, auth.session.workspace.id, lead.version).run();
+  const changed = detailsChanged(before ? { ...before, archived: !!before.archived } : null, { ...lead, country: lead.country || DEFAULT_COUNTRY, archived: !!lead.archived }, leadDetails);
+  const result = await auth.db.prepare(`UPDATE leads SET company_id=COALESCE(?,company_id),primary_contact_id=COALESCE(?,primary_contact_id),name=?,industry=?,city=?,status=?,score=?,owner=?,last=?,next=?,phone=?,email=?,contact=?,priority=?,opportunity=?,value=?,probability=?,close_date=?,archived=?,country=?,changed_at=CASE WHEN ?=1 THEN CURRENT_TIMESTAMP ELSE COALESCE(changed_at,updated_at) END,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND version=?`)
+    .bind(lead.companyId??null,lead.primaryContactId??null,lead.name, lead.industry, lead.city, lead.status, lead.score, lead.owner, lead.last, lead.next, lead.phone, lead.email, lead.contact, lead.priority, lead.opportunity, lead.value ?? null, lead.probability ?? null, lead.closeDate ?? null, lead.archived ? 1 : 0, lead.country || DEFAULT_COUNTRY, changed ? 1 : 0, lead.id, auth.session.workspace.id, lead.version).run();
   if (!result.meta.changes) return Response.json({ error: 'This lead changed elsewhere. Refresh and try again.', conflict: true }, { status: 409 });
   if (before && before.owner !== lead.owner) {
     await handOverLead(auth.db, auth.session.workspace.id, lead.id, before.owner, lead.owner);

@@ -140,7 +140,7 @@ describe('lead export', () => {
 
   it('quotes commas and leaves unscored leads blank', () => {
     const [, row] = leadsToCsv([{ ...lead, name: 'Sun, Moon "Co"' }]).split('\r\n');
-    expect(row.startsWith('"Sun, Moon ""Co""",Food,Cebu,New,,Ana')).toBe(true);
+    expect(row.startsWith('"Sun, Moon ""Co""",Food,Cebu,Philippines,New,,Ana')).toBe(true);
   });
 
   it('stops business names running as spreadsheet formulas', () => {

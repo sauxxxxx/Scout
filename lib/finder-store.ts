@@ -1,4 +1,5 @@
 import { finderCandidateTarget, finderRequestLimit, finishCell, growBox, isRootCell, readSearchState, restrictToBox } from '@/lib/finder-cells';
+import { DEFAULT_COUNTRY, placeLabel, placesRegion } from '@/lib/countries';
 import { calibrateAssessment, createGeminiProvider, finderAiInputHash, geminiCostMicroUsd, parseAssessment, type FinderAiAssessment, type FinderAiInput, type FinderAiStatus } from '@/lib/finder-ai';
 
 import { areaFromBounds, distanceKm, isWithinArea, parseFinderArea, parseFinderBounds, placesSearchArea, type FinderArea, type FinderBounds } from '@/lib/finder-map';
@@ -26,6 +27,7 @@ export type FinderSearchRecord = {
   industryType?: string;
   industryPsicCode?: string;
   location: string;
+  country: string;
   locationCode?: string;
   locationType?: string;
   locationProvince?: string;
@@ -149,7 +151,7 @@ export function mapFinderSearch(row: Record<string, unknown>): FinderSearchRecor
   return {
     area: parseFinderArea(row.map_area_json) || areaFromBounds(parseFinderBounds(row.map_bounds_json)),
     bounds: parseFinderBounds(row.map_bounds_json),
-    id: String(row.id), name: String(row.name), industry: String(row.industry), location: String(row.location),
+    id: String(row.id), name: String(row.name), industry: String(row.industry), location: String(row.location), country: String(row.country || DEFAULT_COUNTRY),
     industryType: row.industry_type ? String(row.industry_type) : undefined, industryPsicCode: row.industry_psic_code ? String(row.industry_psic_code) : undefined,
     locationCode: row.location_code ? String(row.location_code) : undefined, locationType: row.location_type ? String(row.location_type) : undefined,
     locationProvince: row.location_province ? String(row.location_province) : undefined, locationRegion: row.location_region ? String(row.location_region) : undefined,
@@ -426,7 +428,8 @@ export async function processFinderJob(db: D1Database, workspaceId: string, sear
       const cell = state.cells[0];
       const includedType = validGooglePlaceType(job.industryType);
       const requestBody: Record<string, unknown> = {
-        textQuery: searchArea ? job.industry : `${job.industry} in ${job.location}`,
+        textQuery: searchArea ? job.industry : `${job.industry} in ${placeLabel(job.location, job.country)}`,
+        ...placesRegion(job.country),
         ...(isRootCell(cell) ? placesSearchArea(searchArea) : restrictToBox(cell)),
         ...(includedType ? { includedType, strictTypeFiltering: true } : {}),
         pageSize: 20,

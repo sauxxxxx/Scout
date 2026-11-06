@@ -30,26 +30,26 @@ export function Heading({ title, action }:{title:string;action?:React.ReactNode}
   return <div className="page-head"><h1>{title}</h1>{action}</div>
 }
 
-export function useFloatingMenu(open:boolean,trigger:React.RefObject<HTMLButtonElement|null>,options:string[]) {
+export function useFloatingMenu(open:boolean,trigger:React.RefObject<HTMLButtonElement|null>,options:string[],extraHeight=0) {
   const [position,setPosition]=useState<FloatingMenuPosition|null>(null);
   const optionCount=options.length;
   const longestOption=options.reduce((length,option)=>Math.max(length,option.length),0);
   useLayoutEffect(()=>{
     if(!open)return;
-    const update=()=>{const element=trigger.current;if(!element)return;const rect=element.getBoundingClientRect();const margin=8;const gap=4;const naturalHeight=Math.min(optionCount*32+12,292);const below=Math.max(0,window.innerHeight-rect.bottom-margin-gap);const above=Math.max(0,rect.top-margin-gap);const placement:FloatingMenuPosition['placement']=below<naturalHeight&&above>below?'up':'down';const available=placement==='up'?above:below;const width=Math.max(rect.width,Math.min(220,longestOption*7+46));const left=Math.max(margin,Math.min(rect.left,window.innerWidth-width-margin));setPosition({top:placement==='down'?rect.bottom+gap:undefined,bottom:placement==='up'?window.innerHeight-rect.top+gap:undefined,left,width,maxHeight:Math.max(32,Math.min(naturalHeight,available)),placement})};
+    const update=()=>{const element=trigger.current;if(!element)return;const rect=element.getBoundingClientRect();const margin=8;const gap=4;const naturalHeight=Math.min(optionCount*32+12+extraHeight,292);const below=Math.max(0,window.innerHeight-rect.bottom-margin-gap);const above=Math.max(0,rect.top-margin-gap);const placement:FloatingMenuPosition['placement']=below<naturalHeight&&above>below?'up':'down';const available=placement==='up'?above:below;const width=Math.max(rect.width,Math.min(220,longestOption*7+46));const left=Math.max(margin,Math.min(rect.left,window.innerWidth-width-margin));setPosition({top:placement==='down'?rect.bottom+gap:undefined,bottom:placement==='up'?window.innerHeight-rect.top+gap:undefined,left,width,maxHeight:Math.max(32,Math.min(naturalHeight,available)),placement})};
     update();window.addEventListener('resize',update);window.addEventListener('scroll',update,true);return()=>{window.removeEventListener('resize',update);window.removeEventListener('scroll',update,true)}
-  },[open,optionCount,longestOption,trigger]);
+  },[open,optionCount,longestOption,extraHeight,trigger]);
   return position;
 }
 
 export function CustomSelect({value,options:allOptions,onChange,placeholder,label,onSearch,display=(option:string)=>option}:{value:string;options:string[];onChange:(value:string)=>void;placeholder?:string;label?:string;onSearch?:(query:string)=>void;display?:(option:string)=>string}) {
-  const [search,setSearch]=useState('');const options=search?allOptions.filter(option=>option.toLowerCase().includes(search.toLowerCase())):allOptions;
+  const [search,setSearch]=useState('');const options=search?allOptions.filter(option=>display(option).toLowerCase().includes(search.toLowerCase())):allOptions;
   useEffect(()=>{if(!onSearch||search.trim().length<2)return;const timer=window.setTimeout(()=>onSearch(search.trim()),250);return()=>window.clearTimeout(timer)},[search,onSearch]);
-  const [open,setOpen]=useState(false); const [active,setActive]=useState(Math.max(0,options.indexOf(value))); const trigger=useRef<HTMLButtonElement>(null); const position=useFloatingMenu(open,trigger,options);
-  const choose=(option:string)=>{onChange(option);setOpen(false)};
+  const [open,setOpen]=useState(false); const [active,setActive]=useState(Math.max(0,options.indexOf(value))); const trigger=useRef<HTMLButtonElement>(null); const position=useFloatingMenu(open,trigger,options,onSearch?36:0);
+  const choose=(option:string)=>{onChange(option);setOpen(false);setSearch('')};
   const keys=(e:React.KeyboardEvent)=>{if(e.key==='Escape')setOpen(false);if(e.key==='ArrowDown'){e.preventDefault();setOpen(true);setActive(i=>Math.min(options.length-1,i+1))}if(e.key==='ArrowUp'){e.preventDefault();setOpen(true);setActive(i=>Math.max(0,i-1))}if(e.key==='Enter'&&open){e.preventDefault();choose(options[active])}};
   const menu=open&&position&&<div className={`select-menu floating-select-menu placement-${position.placement}`} style={{top:position.top,bottom:position.bottom,left:position.left,width:position.width,maxHeight:position.maxHeight}} role="listbox" onMouseDown={e=>{if((e.target as Element).tagName!=='INPUT')e.preventDefault()}}>{onSearch&&<input className="select-search" autoFocus placeholder="Search…" aria-label="Search options" value={search} onChange={event=>{setSearch(event.target.value);setActive(0)}}/>}{options.map((option,i)=><button type="button" role="option" aria-selected={option===value} className={i===active?'active':''} onMouseEnter={()=>setActive(i)} onClick={()=>choose(option)} key={option}><span>{display(option)}</span>{option===value&&<FiCheck/>}</button>)}</div>;
-  return <div className="custom-select" onKeyDown={keys} onBlur={e=>!e.currentTarget.contains(e.relatedTarget)&&!(e.relatedTarget as Element|null)?.closest?.('.floating-select-menu')&&setOpen(false)}>{label&&<span className="select-label">{label}</span>}<button ref={trigger} type="button" className="select-trigger" aria-haspopup="listbox" aria-expanded={open} onClick={()=>setOpen(v=>!v)}><span>{value?display(value):placeholder||'Select'}</span><FiChevronDown/></button>{menu&&createPortal(menu,document.body)}</div>
+  return <div className="custom-select" onKeyDown={keys} onBlur={e=>!e.currentTarget.contains(e.relatedTarget)&&!(e.relatedTarget as Element|null)?.closest?.('.floating-select-menu')&&setOpen(false)}>{label&&<span className="select-label">{label}</span>}<button ref={trigger} type="button" className="select-trigger" aria-haspopup="listbox" aria-expanded={open} onClick={()=>{setOpen(v=>!v);setSearch('')}}><span>{value?display(value):placeholder||'Select'}</span><FiChevronDown/></button>{menu&&createPortal(menu,document.body)}</div>
 }
 
 /** The status filter and pickers: `options` are the stored names, and people see the workspace's own. */
@@ -70,7 +70,7 @@ export function StatusSelect({value,onChange}:{value:string;onChange:(value:stri
   return <div className="row-status-select" onClick={e=>e.stopPropagation()} onBlur={e=>!e.currentTarget.contains(e.relatedTarget)&&setOpen(false)}><button ref={trigger} type="button" className={`row-status-trigger status-pill ${statusClass(value)}`} aria-haspopup="listbox" aria-expanded={open} onClick={()=>setOpen(v=>!v)}><span>{statusLabel(value)}</span><FiChevronDown/></button>{menu&&createPortal(menu,document.body)}</div>
 }
 
-type LeadPage={total:number;stats?:{active:number;attention:number;proposals:number};industries?:string[]};
+type LeadPage={total:number;stats?:{active:number;attention:number;proposals:number};industries?:string[];countries?:string[]};
 export type CrmData={
   loadLeads:(params:Record<string,string>)=>Promise<LeadPage|null>;
   searchLeads:(query:string)=>void;

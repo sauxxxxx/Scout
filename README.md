@@ -126,6 +126,12 @@ Google returns only its most relevant matches per search, so Scout splits the ar
 
 `FINDER_AI_MAX_CANDIDATES` caps how many results per search get an AI assessment (20 by default). The rest keep their rule-based score.
 
+## Finder countries
+
+Finder can search any country. The Philippines keeps its official list of cities and municipalities. For anywhere else, reps type a city or area, and Google finds it on the map. Saved leads keep their country, and Leads shows a country filter once there's more than one.
+
+Foreign searches use the same Google quota. Currency stays in pesos and time zones are limited to Manila, Singapore and UTC.
+
 ## Sample data
 
 For demos, `npm run demo` fills the local database with a sample team, leads, deals, tasks, activity and Finder searches. Dates are relative to today, so run it again on the day. `npm run demo:remove` takes it out and leaves real records alone. Both only touch the local development database.

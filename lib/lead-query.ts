@@ -28,7 +28,7 @@ export function buildLeadFilter(params: URLSearchParams, workspaceId: string, cu
   if (view === 'Assigned to me') { clauses.push('leads.owner=?'); values.push(currentUser); }
   if (view === 'High priority') clauses.push("leads.priority='High'");
   if (view === 'Recently added') clauses.push("leads.created_at>=datetime('now','-7 days')");
-  const exact: [string, string, string][] = [['status', 'leads.status', 'All statuses'], ['owner', 'leads.owner', 'All owners'], ['priority', 'leads.priority', 'All priorities'], ['industry', 'leads.industry', 'All industries']];
+  const exact: [string, string, string][] = [['country', 'leads.country', 'All countries'], ['status', 'leads.status', 'All statuses'], ['owner', 'leads.owner', 'All owners'], ['priority', 'leads.priority', 'All priorities'], ['industry', 'leads.industry', 'All industries']];
   for (const [key, column, empty] of exact) {
     const value = params.get(key);
     if (value && value !== empty) { clauses.push(`${column}=?`); values.push(value); }

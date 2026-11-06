@@ -16,7 +16,7 @@ const overviewSectionKeys = overviewSectionOptions.map(option => option.key) as 
 
 export const savedFilterSchema = z.object({
   id: z.string().min(1).max(60), name: z.string().trim().min(1).max(40),
-  status: z.string().max(60), owner: z.string().max(120), priority: z.string().max(40), industry: z.string().max(120), minimumScore: z.string().max(20), touchFilter: z.string().max(40),
+  status: z.string().max(60), owner: z.string().max(120), priority: z.string().max(40), industry: z.string().max(120), minimumScore: z.string().max(20), touchFilter: z.string().max(40), country: z.string().max(40).default('All countries'),
 }).strict();
 export type SavedFilter = z.infer<typeof savedFilterSchema>;
 
