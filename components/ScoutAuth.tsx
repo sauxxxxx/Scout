@@ -7,7 +7,7 @@ import { ScoutLogo } from '@/components/crm/shared';
 type GoogleCredential = { credential: string };
 type GoogleIdentity = {
   initialize(options: { client_id: string; callback: (response: GoogleCredential) => void; auto_select?: boolean; cancel_on_tap_outside?: boolean }): void;
-  renderButton(element: HTMLElement, options: { type: 'standard'; theme: 'outline'; size: 'large'; shape: 'rectangular'; text: 'continue_with'; logo_alignment: 'left'; width: number }): void;
+  renderButton(element: HTMLElement, options: { type: 'standard'; theme: 'outline' | 'filled_black'; size: 'large'; shape: 'pill'; text: 'continue_with'; logo_alignment: 'left'; width: number; locale: string }): void;
 };
 
 type Invitation = { branding?: PublicBranding; status: string; emailHint?: string; workspaceName?: string; inviterName?: string; roleLabel?: string; note?: string };
@@ -53,14 +53,15 @@ export function ScoutAuth({ message }: { message?: string }) {
       if (!window.google || !buttonRef.current) return;
       buttonRef.current.replaceChildren();
       window.google.accounts.id.initialize({ client_id: clientId, callback: handleCredential, auto_select: false, cancel_on_tap_outside: true });
-      const width = Math.max(240, Math.min(320, Math.floor(buttonRef.current.getBoundingClientRect().width)));
-      window.google.accounts.id.renderButton(buttonRef.current, { type: 'standard', theme: 'outline', size: 'large', shape: 'rectangular', text: 'continue_with', logo_alignment: 'left', width });
+      const width = Math.max(240, Math.min(400, Math.floor(buttonRef.current.getBoundingClientRect().width)));
+      const theme = document.documentElement.dataset.theme === 'dark' ? 'filled_black' : 'outline';
+      window.google.accounts.id.renderButton(buttonRef.current, { type: 'standard', theme, size: 'large', shape: 'pill', text: 'continue_with', logo_alignment: 'left', width, locale: 'en' });
       setGoogleReady(true);
     };
     const existing = document.querySelector<HTMLScriptElement>('script[data-scout-google]');
     if (existing) { if (window.google) render(); else existing.addEventListener('load', render, { once: true }); return; }
     const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client'; script.async = true; script.defer = true; script.dataset.scoutGoogle = 'true'; script.onload = render; script.onerror = () => setError('Google sign-in could not load.');
+    script.src = 'https://accounts.google.com/gsi/client?hl=en'; script.async = true; script.defer = true; script.dataset.scoutGoogle = 'true'; script.onload = render; script.onerror = () => setError('Google sign-in could not load.');
     document.head.appendChild(script);
   }, [clientId]);
 
@@ -68,10 +69,13 @@ export function ScoutAuth({ message }: { message?: string }) {
   const roleName = invite?.roleLabel ? invite.roleLabel.charAt(0).toUpperCase() + invite.roleLabel.slice(1) : 'a member';
   const closedInvite = !invite || pendingInvite ? '' : invite.status === 'expired' ? `This invitation has expired. Ask ${invite.inviterName} for a new one.` : invite.status === 'revoked' ? 'This invitation was revoked. Ask your workspace owner for a new one.' : invite.status === 'accepted' ? 'This invitation has already been used. Sign in below.' : 'This invitation link is not valid.';
 
-  return <main className="scout-auth-page">
+  return <main className="scout-auth-page"><div className="scout-auth-bento">
+    <aside className="scout-auth-brand">
+      <div className={`scout-auth-mark${branding?.logoUrl ? ' has-logo' : ''}`}><ScoutLogo logoUrl={branding?.logoUrl} />{!branding?.logoUrl && <span>Scout</span>}</div>
+      <p className="scout-auth-line">Find them. <span>Follow up.</span> <mark>Close.</mark></p>
+    </aside>
     <section className="scout-auth-card" aria-labelledby="scout-auth-title">
-      <ScoutLogo className="scout-auth-logo" logoUrl={branding?.logoUrl} />
-      <h1 id="scout-auth-title">{pendingInvite ? `Join ${invite?.workspaceName}` : 'Sign in to Scout'}</h1>
+      <h1 id="scout-auth-title">{pendingInvite ? `Join ${invite?.workspaceName}` : 'Sign in'}</h1>
       {pendingInvite
         ? <p>{invite?.inviterName} invited you as {roleName}. Continue with the Google account for <strong>{invite?.emailHint}</strong>.</p>
         : <p>{branding?.welcomeMessage || 'Scout is invitation-only. Use the Google account your workspace added.'}</p>}
@@ -87,6 +91,7 @@ export function ScoutAuth({ message }: { message?: string }) {
       {!clientId && !loading && <div className="scout-auth-error" role="alert">Google sign-in isn&apos;t set up yet. Ask your workspace owner.</div>}
       {error && <div className="scout-auth-error" role="alert">{error}</div>}
       {message && !message.toLowerCase().includes('authentication required') && <small className="scout-auth-message">{message}</small>}
+      {!pendingInvite && <small className="scout-auth-help">No access yet? Ask your workspace owner.</small>}
     </section>
-  </main>;
+  </div></main>;
 }
