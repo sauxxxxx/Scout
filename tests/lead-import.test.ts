@@ -74,9 +74,20 @@ describe('saving an import batch', () => {
     const body = { ownerId: 'u-ana', status: 'Prospect', priority: 'High', rows: [row(2, 'Smile Dental')] };
     await send(body);
     const again = await (await send(body)).json() as { imported: unknown[]; skipped: string[] };
-    expect(again).toEqual({ imported: [], skipped: ['Smile Dental'] });
+    expect(again).toEqual({ imported: [], skipped: ['Smile Dental'], phoneMatches: [] });
     expect(store.sqlite.prepare("SELECT COUNT(*) total FROM leads WHERE name='Smile Dental'").get()).toEqual({ total: 1 });
     expect(store.sqlite.prepare("SELECT prospect_at IS NOT NULL counted FROM leads WHERE name='Smile Dental'").get()).toEqual({ counted: 1 });
+  });
+
+  it('holds back rows whose phone is already on a lead, unless the rep says they are separate branches', async () => {
+    store.sqlite.exec("UPDATE leads SET phone='0917 123 4567' WHERE id='old'");
+    const body = { ownerId: 'u-ana', status: 'New', priority: 'Medium', rows: [row(2, 'Old Clinic Branch 2', { phone: '+63 917-123-4567' }), row(3, 'New Spa', { phone: '0918 000 0000' })] };
+    const first = await (await send(body)).json() as { imported: { name: string }[]; phoneMatches: { name: string; existing: string }[] };
+    expect(first.imported.map(lead => lead.name)).toEqual(['New Spa']);
+    expect(first.phoneMatches).toEqual([{ name: 'Old Clinic Branch 2', existing: 'Old Clinic' }]);
+    const again = await (await send({ ...body, allowPhoneMatches: true })).json() as { imported: { name: string }[]; skipped: string[] };
+    expect(again.imported.map(lead => lead.name)).toEqual(['Old Clinic Branch 2']);
+    expect(again.skipped).toEqual(['New Spa']);
   });
 
   it('stops reps from importing leads for someone else', async () => {

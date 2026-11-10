@@ -6,7 +6,7 @@ import { FINDER_DEFAULT_LEADS } from '@/lib/finder-cells';
 export const DEFAULT_WORKSPACE_ID = 'scout-default';
 
 /** Bump when anything in migrateFoundationSchema changes. Requests then skip the whole setup unless this moved. */
-export const SCHEMA_VERSION = 26;
+export const SCHEMA_VERSION = 27;
 
 const createUsersTable = `CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
@@ -304,7 +304,7 @@ async function migrateFoundationSchema(db: D1Database) {
   });
   await addColumns(db, 'finder_results', {
     latitude: 'REAL', longitude: 'REAL', distance_km: 'REAL', facebook_status: "TEXT NOT NULL DEFAULT 'not_found'", facebook_verified_at: 'TEXT',
-    facebook_research_json: "TEXT NOT NULL DEFAULT '{}'", review_version: 'INTEGER NOT NULL DEFAULT 0',
+    facebook_research_json: "TEXT NOT NULL DEFAULT '{}'", review_version: 'INTEGER NOT NULL DEFAULT 0', channels_json: "TEXT NOT NULL DEFAULT '{}'",
   });
 
   await db.prepare('INSERT OR IGNORE INTO workspaces (id, name) VALUES (?, ?)').bind(DEFAULT_WORKSPACE_ID, 'Sales workspace').run();

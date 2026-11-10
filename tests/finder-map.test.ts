@@ -62,7 +62,7 @@ describe('Finder geography', () => {
     sql.exec('CREATE TABLE leads (id TEXT, workspace_id TEXT)');
     sql.exec(readFileSync('db/migrations/0013_finder_sales_review.sql', 'utf8'));
     sql.exec('CREATE TABLE opportunities (id TEXT)');
-    sql.exec(readFileSync('db/migrations/0016_sales_workflow.sql', 'utf8'));
+    sql.exec(readFileSync('db/migrations/0016_sales_workflow.sql', 'utf8')); sql.exec(readFileSync('db/migrations/0025_finder_channels.sql', 'utf8'));
     const statement = (query: string, values: SQLInputValue[] = []) => ({
       bind: (...args: SQLInputValue[]) => statement(query, args),
       first: async () => sql.prepare(query).get(...values) || null,

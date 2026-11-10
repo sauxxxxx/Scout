@@ -2094,6 +2094,17 @@ button,input,select,textarea { font-family:inherit; }
 .finder-row-facts em.ready { background:var(--positive-soft); color:var(--positive); }
 .finder-row-facts em.research { background:var(--warning-soft); color:var(--warning); }
 .finder-row-facts em.existing { background:var(--info-soft); color:var(--info); }
+.finder-row-facts em.closed { background:var(--negative-soft); color:var(--negative); }
+.finder-channel-links { display:flex; flex-wrap:wrap; gap:6px 12px; }
+.finder-channel-links a { display:inline-flex; align-items:center; gap:4px; }
+.finder-review-next { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin-top:16px; padding-top:14px; border-top:1px solid var(--line); color:var(--muted); font-size:var(--text-sm); }
+.finder-bulk-facebook textarea { min-height:140px; font:inherit; font-size:var(--text-md); white-space:pre; overflow-x:auto; tab-size:20; }
+.finder-bulk-summary { padding:12px 14px; border-radius:14px; background:var(--surface); font-size:var(--text-md); }
+.finder-bulk-list,.finder-bulk-problems { max-height:180px; overflow-y:auto; margin:8px 0 0; padding:0; list-style:none; }
+.finder-bulk-list li { display:flex; justify-content:space-between; gap:12px; padding:5px 0; border-bottom:1px solid var(--line); }
+.finder-bulk-list li small { overflow:hidden; color:var(--muted); text-overflow:ellipsis; white-space:nowrap; }
+.finder-bulk-problems li { padding:3px 0; color:var(--warning); font-size:var(--text-sm); }
+.finder-bulk-summary details { margin-top:8px; }
 .finder-row-side { display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
 .finder-fit { display:inline-flex; align-items:baseline; gap:3px; color:var(--muted); font-size:var(--text-xs); }
 .finder-fit b { color:var(--ink); font-size:var(--text-lg); font-variant-numeric:tabular-nums; }
@@ -2143,6 +2154,8 @@ button,input,select,textarea { font-family:inherit; }
 .lead-import-mapping label { min-width:0; display:flex; flex-direction:column; gap:6px; color:var(--muted); font-size:var(--text-xs); font-weight:500; }
 .lead-import-mapping input { height:38px; padding:0 11px; border:1px solid var(--line-strong); border-radius:var(--radius-sm); background:var(--canvas); color:var(--ink); font:inherit; font-size:var(--text-md); }
 .lead-import-defaults { margin-top:10px; }
+.lead-import-check { display:flex; align-items:center; gap:8px; margin-top:12px; color:var(--ink-2); font-size:var(--text-sm); }
+.lead-import-check input { width:16px; height:16px; accent-color:var(--ink); }
 .lead-import-summary { margin-top:18px; padding:12px 14px; border-radius:14px; background:var(--surface); font-size:var(--text-md); line-height:1.5; }
 .lead-import-summary p { margin:0; }
 .lead-import-summary p+p { margin-top:6px; color:var(--warning); font-size:var(--text-sm); }

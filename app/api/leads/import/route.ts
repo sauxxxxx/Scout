@@ -4,6 +4,7 @@ import { normalizeFacebookPageUrl } from '@/lib/finder-sales';
 import { leadColumns, leadJoins } from '@/lib/lead-query';
 import { leadImportSchema, nameKey } from '@/lib/lead-import';
 import { notifyMember } from '@/lib/notifications';
+import { phoneKey } from '@/lib/phone';
 import { validationError } from '@/lib/validation';
 import { mapLead } from '@/lib/workspace-store';
 
@@ -27,10 +28,12 @@ export async function POST(request: Request) {
 
   const names = input.rows.map(row => nameKey(row.name));
   const marks = names.map(() => '?').join(',');
-  const [takenLeads, takenCompanies] = await db.batch([
+  const [takenLeads, takenCompanies, phoned] = await db.batch([
     db.prepare(`SELECT lower(name) name FROM leads WHERE workspace_id=? AND lower(name) IN (${marks})`).bind(workspaceId, ...names),
     db.prepare(`SELECT id,lower(name) name FROM companies WHERE workspace_id=? AND lower(name) IN (${marks})`).bind(workspaceId, ...names),
+    db.prepare("SELECT name,phone,country FROM leads WHERE workspace_id=? AND phone<>''").bind(workspaceId),
   ]);
+  const phoneOwner = new Map((phoned.results as { name: string; phone: string; country: string }[]).map(row => [phoneKey(row.phone, row.country), row.name] as const).filter(([key]) => key));
   const leadTaken = new Set((takenLeads.results as { name: string }[]).map(row => nameKey(row.name)));
   const companyByName = new Map((takenCompanies.results as { id: string; name: string }[]).map(row => [nameKey(row.name), row.id]));
 
@@ -39,10 +42,14 @@ export async function POST(request: Request) {
   const statements: D1PreparedStatement[] = [];
   const created: string[] = [];
   const skipped: string[] = [];
+  const phoneMatches: { name: string; existing: string }[] = [];
   for (const row of input.rows) {
     const key = nameKey(row.name);
     if (leadTaken.has(key)) { skipped.push(row.name); continue; }
+    const phone = phoneKey(row.phone, row.country);
+    if (phone && phoneOwner.has(phone) && !input.allowPhoneMatches) { phoneMatches.push({ name: row.name, existing: phoneOwner.get(phone)! }); continue; }
     leadTaken.add(key);
+    if (phone) phoneOwner.set(phone, row.name);
     const leadId = crypto.randomUUID();
     const contactId = crypto.randomUUID();
     const existingCompany = companyByName.get(key);
@@ -74,5 +81,5 @@ export async function POST(request: Request) {
     await recordAudit(auth, 'leads.imported', owner.name, `${created.length} from spreadsheet`);
     await notifyMember(auth, owner.name, 'leadAssignments', `${created.length} lead${created.length === 1 ? '' : 's'} assigned to you`, 'Imported from a spreadsheet', '?page=leads');
   }
-  return Response.json({ imported: saved.results.map(mapLead), skipped });
+  return Response.json({ imported: saved.results.map(mapLead), skipped, phoneMatches });
 }

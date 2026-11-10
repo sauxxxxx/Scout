@@ -11,7 +11,7 @@ import { guessMapping, LEAD_IMPORT_MAX_ROWS, LEAD_IMPORT_STATUSES, leadImportFie
 import type { Lead } from '@/lib/crm-types';
 
 type Sheet = { fileName: string; table: string[][] };
-type Outcome = { added: number; skipped: string[]; error?: string };
+type Outcome = { added: number; skipped: string[]; phoneMatches: { name: string; existing: string }[]; error?: string };
 
 /** Adds leads from a CSV that Excel or Google Sheets saved. Rows go up in batches of 25, and leads already in Scout are skipped. */
 export function LeadImport({ onClose, onImported }: { onClose: () => void; onImported: (leads: Lead[]) => void }) {
@@ -23,7 +23,7 @@ export function LeadImport({ onClose, onImported }: { onClose: () => void; onImp
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [mapping, setMapping] = useState<LeadImportMapping | null>(null);
   const [defaults, setDefaults] = useState({ industry: '', city: '' });
-  const [settings, setSettings] = useState({ ownerId: currentMember?.id || owners[0]?.id || '', status: 'New', priority: 'Medium' });
+  const [settings, setSettings] = useState({ ownerId: currentMember?.id || owners[0]?.id || '', status: 'New', priority: 'Medium', allowPhoneMatches: false });
   const [readError, setReadError] = useState('');
   const [dragging, setDragging] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
@@ -55,19 +55,20 @@ export function LeadImport({ onClose, onImported }: { onClose: () => void; onImp
     if (!plan?.rows.length || !settings.ownerId) return;
     const added: Lead[] = [];
     const skipped: string[] = [];
+    const phoneMatches: Outcome['phoneMatches'] = [];
     setOutcome(null);
     try {
       for (const batch of importBatches(plan.rows)) {
         setProgress({ done: added.length + skipped.length, total: plan.rows.length });
         const response = await fetch('/api/leads/import', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...settings, rows: batch }) });
-        const data = await response.json() as { imported?: Lead[]; skipped?: string[]; error?: string; fields?: Record<string, string[]> };
+        const data = await response.json() as { imported?: Lead[]; skipped?: string[]; phoneMatches?: Outcome['phoneMatches']; error?: string; fields?: Record<string, string[]> };
         if (!response.ok) throw new Error([data.error || 'This batch could not be saved.', ...Object.values(data.fields || {}).flat()].join(' '));
-        added.push(...(data.imported || [])); skipped.push(...(data.skipped || []));
+        added.push(...(data.imported || [])); skipped.push(...(data.skipped || [])); phoneMatches.push(...(data.phoneMatches || []));
         onImported(data.imported || []);
       }
-      setOutcome({ added: added.length, skipped });
+      setOutcome({ added: added.length, skipped, phoneMatches });
     } catch (cause) {
-      setOutcome({ added: added.length, skipped, error: `${cause instanceof Error ? cause.message : 'The import stopped.'} ${added.length ? `${added.length} were added before it stopped. Import the same rows again to add the rest; leads already added are skipped.` : ''}`.trim() });
+      setOutcome({ added: added.length, skipped, phoneMatches, error: `${cause instanceof Error ? cause.message : 'The import stopped.'} ${added.length ? `${added.length} were added before it stopped. Import the same rows again to add the rest; leads already added are skipped.` : ''}`.trim() });
     } finally { setProgress(null); }
   };
 
@@ -85,8 +86,9 @@ export function LeadImport({ onClose, onImported }: { onClose: () => void; onImp
       {outcome && !outcome.error ? <section className="lead-import-done" aria-live="polite">
         <span className="lead-import-done-icon"><FiCheck aria-hidden="true" /></span>
         <h3>{outcome.added} lead{outcome.added === 1 ? '' : 's'} added</h3>
-        <p>{outcome.skipped.length ? `${outcome.skipped.length} already in Scout, so they were skipped.` : 'They’re in Leads now with the owner and status you chose.'}</p>
-        {outcome.skipped.length > 0 && <details><summary>Show skipped businesses</summary><ul>{outcome.skipped.map(name => <li key={name}>{name}</li>)}</ul></details>}
+        <p>{outcome.skipped.length || outcome.phoneMatches.length ? [outcome.skipped.length ? `${outcome.skipped.length} already in Scout by name` : '', outcome.phoneMatches.length ? `${outcome.phoneMatches.length} share a phone number with a lead already in Scout` : ''].filter(Boolean).join(', ') + ', so they were skipped.' : 'They’re in Leads now with the owner and status you chose.'}</p>
+        {outcome.skipped.length > 0 && <details><summary>Show businesses skipped by name</summary><ul>{outcome.skipped.map(name => <li key={name}>{name}</li>)}</ul></details>}
+        {outcome.phoneMatches.length > 0 && <details open><summary>Show businesses with a matching phone</summary><ul>{outcome.phoneMatches.map(item => <li key={item.name}>{item.name} — same phone as {item.existing}</li>)}</ul><p className="lead-import-hint">If these are separate branches, import the same rows again with “Add rows whose phone is already in Scout” ticked. Rows already added are skipped.</p></details>}
         <footer><button type="button" className="primary" onClick={onClose}>Done</button></footer>
       </section> : !sheet || !mapping || !plan ? <section>
         <label className="lead-import-paste">
@@ -121,9 +123,10 @@ export function LeadImport({ onClose, onImported }: { onClose: () => void; onImp
           <label><span>Status</span><ScoutSelect ariaLabel="Status for imported leads" value={settings.status} options={LEAD_IMPORT_STATUSES.map(value => ({ value, label: statusLabel(value) }))} onChange={status => setSettings({ ...settings, status })} /></label>
           <label><span>Priority</span><ScoutSelect ariaLabel="Priority for imported leads" value={settings.priority} options={['High', 'Medium', 'Low'].map(value => ({ value, label: value }))} onChange={priority => setSettings({ ...settings, priority })} /></label>
         </div>
+        <label className="lead-import-check"><input type="checkbox" checked={settings.allowPhoneMatches} onChange={event => setSettings({ ...settings, allowPhoneMatches: event.target.checked })} />Add rows whose phone is already in Scout (separate branches sharing a number)</label>
 
         <div className="lead-import-summary" aria-live="polite">
-          <p><strong>{plan.rows.length} ready to add.</strong>{plan.missingName.length ? ` ${plan.missingName.length} without a business name left out.` : ''}{plan.repeated.length ? ` ${plan.repeated.length} repeated in the file left out.` : ''} Businesses already in Scout are skipped.</p>
+          <p><strong>{plan.rows.length} ready to add.</strong>{plan.missingName.length ? ` ${plan.missingName.length} without a business name left out.` : ''}{plan.repeated.length ? ` ${plan.repeated.length} repeated in the file left out.` : ''} Businesses already in Scout, by name or phone number, are skipped.</p>
           {sheet.table.length - 1 > LEAD_IMPORT_MAX_ROWS && <p>Only the first {LEAD_IMPORT_MAX_ROWS.toLocaleString()} rows are imported. Split the file to add the rest.</p>}
           {plan.fixes.map(fix => <p key={fix}>{fix}</p>)}
         </div>

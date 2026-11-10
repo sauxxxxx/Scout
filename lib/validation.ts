@@ -182,6 +182,15 @@ export const finderFacebookSchema = z.object({
   if (value.status === 'confirmed' && (!value.research?.identityChecks.includes('name') || value.research.identityChecks.length < 2 || !value.research.pageName)) context.addIssue({ code: 'custom', path: ['research'], message: 'Match the page name and at least one location or contact detail before confirming.' });
 });
 
+export const finderBulkProspectsSchema = z.object({
+  action: z.literal('add-prospects'), searchId: recordId, city: z.string().trim().min(2).max(160),
+  prospects: z.array(z.object({
+    name: z.string().trim().min(2).max(160),
+    facebookUrl: z.string().max(2000).refine(value => !!normalizeFacebookPageUrl(value), 'Enter a business Facebook page URL.'),
+  }).strict()).min(1).max(50),
+  locationConfirmed: z.literal(true, { error: 'Check that these businesses are in your selected search area.' }),
+}).strict();
+
 export const finderManualProspectSchema = z.object({
   action: z.literal('add-prospect'), searchId: recordId, name: z.string().trim().min(2).max(160),
   city: z.string().trim().min(2).max(160), address: z.string().trim().max(300),

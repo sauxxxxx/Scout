@@ -6,7 +6,10 @@ import { ScoutSelect } from '@/components/ScoutSelect';
 import { facebookActivity, facebookResearchSchema, normalizeFacebookPageUrl, readFacebookResearch, type FacebookResearch, type SalesProspect } from '@/lib/finder-sales';
 
 type Prospect = SalesProspect & { id: string; reviewVersion: number };
-export function FinderFacebookReview({ result, onSave, onDirty }: { result: Prospect; onSave: (url: string, status: 'confirmed' | 'possible' | 'not_found', research: FacebookResearch, version: number) => Promise<void>; onDirty: (dirty: boolean) => void }) {
+/** onNext moves to the next business in the list that still needs its Facebook page checked. */
+export function FinderFacebookReview({ result, onSave, onDirty: reportDirty, onNext, remaining = 0 }: { result: Prospect; onSave: (url: string, status: 'confirmed' | 'possible' | 'not_found', research: FacebookResearch, version: number) => Promise<void>; onDirty: (dirty: boolean) => void; onNext?: () => void; remaining?: number }) {
+  const [dirty, setDirty] = useState(false);
+  const onDirty = (value: boolean) => { setDirty(value); reportDirty(value); };
   const [url, setUrl] = useState(result.socialUrl);
   const [research, setResearch] = useState(() => readFacebookResearch(result.facebookResearch));
   const [version, setVersion] = useState(result.reviewVersion);
@@ -42,5 +45,5 @@ export function FinderFacebookReview({ result, onSave, onDirty }: { result: Pros
     {result.facebookResearch?.reviewedBy && <small className="finder-review-hint">Reviewed by {result.facebookResearch.reviewedBy} · {new Date(result.facebookResearch.reviewedAt || result.facebookVerifiedAt || '').toLocaleDateString()} · {activity === 'recent' ? 'Recent post observed' : activity === 'older' ? 'Older post observed' : 'Activity unknown'}</small>}
     {error && <p role="alert" className="finder-review-error">{error}</p>}{saved && <p role="status" className="finder-review-saved"><FiCheck />{saved}</p>}
     <div className="finder-review-buttons"><button className="primary" disabled={busy || !confirmed} onClick={() => save('confirmed')}>{busy ? 'Saving…' : 'Confirm & save review'}</button><button className="secondary" disabled={busy || !url.trim()} onClick={() => save('possible')}>Save for review</button><button disabled={busy} onClick={() => save('not_found')}>No page found</button></div>
-  </section>;
+  {onNext && <div className="finder-review-next"><span>{remaining} more in this list to review</span><button type="button" className="secondary" disabled={busy || dirty} title={dirty ? 'Save or clear your changes first' : undefined} onClick={onNext}>{saved ? 'Next to review' : 'Skip to next'} →</button></div>}</section>;
 }

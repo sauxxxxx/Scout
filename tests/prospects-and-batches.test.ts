@@ -37,6 +37,19 @@ describe('prospects', () => {
   });
 });
 
+describe('matching Finder results to leads by phone', () => {
+  it('flags a business with the same phone as a possible existing lead, without treating it as certain', async () => {
+    const { db, sqlite } = testD1();
+    await ensureFoundationSchema(db);
+    insertLead(sqlite, 'lead-p', 'Bright Smile Dental', 'New');
+    sqlite.prepare("UPDATE leads SET phone='(032) 123 4567' WHERE id='lead-p'").run();
+    const leads = await existingFinderLeads(db, W);
+    const prospect = { name: 'Bright Smile Dental Clinic - Lahug', city: 'Cebu', address: '1 Gorordo Ave', phone: '+63 32 123 4567', email: '', website: '', socialUrl: '', provider: 'Google Places', providerRecordId: 'place-9' };
+    expect(findDuplicate(prospect, leads)).toBeUndefined();
+    expect(possibleDuplicates(prospect, leads).map(lead => lead.id)).toEqual(['lead-p']);
+  });
+});
+
 describe('counting activities by day', () => {
   it('counts the first and last day of a period, with or without a time, and nothing outside it', async () => {
     const { db, sqlite } = testD1();

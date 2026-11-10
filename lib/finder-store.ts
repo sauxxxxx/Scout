@@ -4,6 +4,7 @@ import { calibrateAssessment, createGeminiProvider, finderAiInputHash, geminiCos
 
 import { areaFromBounds, distanceKm, isWithinArea, parseFinderArea, parseFinderBounds, placesSearchArea, type FinderArea, type FinderBounds } from '@/lib/finder-map';
 import { validGooglePlaceType } from '@/lib/finder-industries';
+import { contactPageUrls, extractContacts, type ContactChannels } from '@/lib/website-contacts';
 import { matchesContactRequirements, normalizeFacebookPageUrl, readFacebookResearch, salesOpportunity, type FacebookResearch, type RequirementMode, type SalesFocus } from '@/lib/finder-sales';
 
 export type FinderStatus = 'Saved' | 'Queued' | 'Running' | 'Complete' | 'Partial' | 'Failed' | 'Cancelled';
@@ -55,6 +56,7 @@ export type FinderSearchRecord = {
 };
 
 export type FinderResultRecord = {
+  channels: ContactChannels;
   latitude?: number;
   longitude?: number;
   distanceKm?: number;
@@ -165,6 +167,10 @@ export function mapFinderSearch(row: Record<string, unknown>): FinderSearchRecor
   };
 }
 
+function readChannels(value: unknown): ContactChannels {
+  try { const parsed = JSON.parse(String(value || '{}')) as ContactChannels; return parsed && typeof parsed === 'object' ? parsed : {}; } catch { return {}; }
+}
+
 export function mapFinderResult(row: Record<string, unknown>): FinderResultRecord {
   return {
     latitude: row.latitude == null ? undefined : Number(row.latitude), longitude: row.longitude == null ? undefined : Number(row.longitude),
@@ -174,7 +180,7 @@ export function mapFinderResult(row: Record<string, unknown>): FinderResultRecor
     facebookResearch: readFacebookResearch(row.facebook_research_json), reviewVersion: Number(row.review_version || 0),
     id: String(row.id), searchId: String(row.search_id), provider: String(row.provider), providerRecordId: String(row.provider_record_id),
     name: String(row.name), industry: String(row.industry), address: String(row.address), city: String(row.city), phone: String(row.phone),
-    email: String(row.email), website: String(row.website), socialUrl: String(row.social_url), sourceUrl: String(row.source_url),
+    email: String(row.email), website: String(row.website), socialUrl: String(row.social_url), sourceUrl: String(row.source_url), channels: readChannels(row.channels_json),
     businessStatus: row.business_status ? String(row.business_status) : undefined, rating: row.rating == null ? undefined : Number(row.rating),
     reviewCount: row.review_count == null ? undefined : Number(row.review_count), score: Number(row.score), scoreReason: String(row.score_reason),
     opportunity: String(row.opportunity), provenance: parseArray(row.provenance_json) as FinderResultRecord['provenance'],
@@ -216,12 +222,15 @@ function publicWebsite(url: string) {
 
 const facebookUrl = normalizeFacebookPageUrl;
 
-async function websiteEvidence(website: string) {
-  if (!website || !publicWebsite(website)) return { email: '', socialUrl: '', summary: '' };
+type WebsiteEvidence = { email: string; socialUrl: string; summary: string; phone?: string; channels?: ContactChannels };
+const emptyEvidence = (): WebsiteEvidence => ({ email: '', socialUrl: '', summary: '' });
+
+async function websiteEvidence(website: string): Promise<WebsiteEvidence> {
+  if (!website || !publicWebsite(website)) return emptyEvidence();
   try {
     let root = new URL(website);
     const sameHost = (url: URL) => url.hostname.replace(/^www\./i, '') === root.hostname.replace(/^www\./i, '') && url.port === root.port;
-    const fetchPage = async (url: string) => {
+    const fetchPage = async (url: string, kind: 'html' | 'xml' = 'html') => {
       const signal = AbortSignal.timeout(4000);
       for (let redirects = 0; redirects <= 3; redirects++) {
         if (!publicWebsite(url) || !sameHost(new URL(url))) return '';
@@ -229,31 +238,29 @@ async function websiteEvidence(website: string) {
         if ([301,302,303,307,308].includes(response.status)) {
           const location = response.headers.get('location'); await response.body?.cancel(); if (!location) return ''; url = new URL(location,url).href; continue;
         }
-        if (!response.ok || !response.headers.get('content-type')?.includes('text/html')) { await response.body?.cancel(); return ''; }
+        if (!response.ok || !response.headers.get('content-type')?.includes(kind)) { await response.body?.cancel(); return ''; }
         const reader = response.body?.getReader(); if (!reader) return '';
         const decoder = new TextDecoder(); let text = ''; let size = 0;
         try { while (size < 300_000) { const {done,value} = await reader.read(); if (done) break; const chunk=value.subarray(0,300_000-size); size+=chunk.length; text+=decoder.decode(chunk,{stream:true}); } text+=decoder.decode(); }
         finally { await reader.cancel(); }
-        root = new URL(url); return text;
+        if (kind === 'html') root = new URL(url);
+        return text;
       }
       return '';
     };
     const homepage = await fetchPage(root.href);
-    if (!homepage) return { email: '', socialUrl: '', summary: '' };
-    const candidates = [...homepage.matchAll(/href=["']([^"']+)["']/gi)].map(match => match[1]).filter(href => /(?:contact|about|team)/i.test(href));
-    const pageUrls = [...new Set([...candidates, '/contact', '/contact-us'].map(href => {
-      try { return new URL(href, root).href; } catch { return ''; }
-    }).filter(Boolean))].filter(url => new URL(url).origin === root.origin).slice(0, 2);
-    const extraPages = await Promise.all(pageUrls.map(fetchPage));
+    if (!homepage) return emptyEvidence();
+    // The sitemap costs one more request, so it is only read when the homepage links no contact-type page.
+    const linksContactPage = /<a\b[^>]*href=["'][^"']*(?:contact|about|location|branch)[^"']*["']/i.test(homepage);
+    const sitemap = linksContactPage ? '' : await fetchPage(new URL('/sitemap.xml', root).href, 'xml');
+    const extraPages = await Promise.all(contactPageUrls(homepage, sitemap, root).map(url => fetchPage(url)));
+    const contacts = extractContacts([homepage, ...extraPages], root.href);
     const html = [homepage, ...extraPages].filter(Boolean).join('\n');
-    const emails = [...html.matchAll(/mailto:([^?'"\s<>]+)/gi)].map(match => decodeURIComponent(match[1]).replace(/&amp;/gi, '&')).filter(value => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value));
-    const socialCandidates = [...html.replace(/\\\//g, '/').matchAll(/https?:\/\/(?:www\.|m\.|mbasic\.)?facebook\.com\/[^'"\s<>]+/gi)];
-    const socialUrl = socialCandidates.map(match => facebookUrl(match[0].replace(/&amp;/gi, '&'))).find(Boolean) || '';
     const title = homepage.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || '';
     const description = homepage.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)/i)?.[1] || homepage.match(/<meta[^>]+content=["']([^"']*)["'][^>]+name=["']description["']/i)?.[1] || '';
     const visible = html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&(?:nbsp|amp|quot|#39);/gi, ' ').replace(/\s+/g, ' ').trim();
     const summary = [title, description, visible].filter(Boolean).join(' · ').slice(0, 2400);
-    return { email: emails[0] || '', socialUrl, summary };
+    return { email: contacts.email, socialUrl: contacts.socialUrl, summary, phone: contacts.phone, channels: contacts.channels };
   } catch {
     return { email: '', socialUrl: '', summary: '' };
   }
@@ -471,11 +478,14 @@ export async function processFinderJob(db: D1Database, workspaceId: string, sear
         const name = place.displayName?.text?.trim() || '';
         const sourceUrl = place.googleMapsUri || '';
         const website = directFacebook ? '' : place.websiteUri || '';
-        const phone = place.internationalPhoneNumber || place.nationalPhoneNumber || '';
+        const googlePhone = place.internationalPhoneNumber || place.nationalPhoneNumber || '';
+        const phone = googlePhone || evidence.phone || '';
+        const channels = evidence.channels || {};
         const assessment = assessPlace(place, evidence, job.salesFocus);
         const provenance: FinderResultRecord['provenance'] = [
           { field: 'business', provider: 'Google Places', sourceUrl, retrievedAt: fetchedAt },
-          ...(phone ? [{ field: 'phone', provider: 'Google Places', sourceUrl, retrievedAt: fetchedAt }] : []),
+          ...(phone ? [{ field: 'phone', provider: googlePhone ? 'Google Places' : 'Company website', sourceUrl: googlePhone ? sourceUrl : website, retrievedAt: fetchedAt }] : []),
+          ...(Object.keys(channels).length ? [{ field: 'messaging', provider: 'Company website', sourceUrl: website, retrievedAt: fetchedAt }] : []),
           ...(website ? [{ field: 'website', provider: 'Google Places', sourceUrl, retrievedAt: fetchedAt }] : []),
           ...(evidence.email ? [{ field: 'email', provider: 'Company website', sourceUrl: website, retrievedAt: fetchedAt }] : []),
           ...(evidence.socialUrl ? [{ field: 'facebook', provider: directFacebook ? 'Google Places' : 'Company website', sourceUrl: evidence.socialUrl, retrievedAt: fetchedAt }] : []),
@@ -488,7 +498,7 @@ export async function processFinderJob(db: D1Database, workspaceId: string, sear
           latitude, longitude, distanceKm: resultDistanceKm,
           provider: 'Google Places', providerRecordId: place.id || crypto.randomUUID(), name,
           industry: place.primaryTypeDisplayName?.text || job.industry, address: place.formattedAddress || '', city: cityFromPlace(place, job.location),
-          phone, email: evidence.email, website, socialUrl: evidence.socialUrl, sourceUrl, businessStatus: place.businessStatus,
+          phone, email: evidence.email, website, socialUrl: evidence.socialUrl, channels, sourceUrl, businessStatus: place.businessStatus,
           rating: place.rating, reviewCount: place.userRatingCount, ...assessment, websiteSummary: evidence.summary, provenance, fetchedAt, verifiedAt: fetchedAt,
           facebookStatus: evidence.socialUrl ? 'possible' : 'not_found',
         };
@@ -497,9 +507,9 @@ export async function processFinderJob(db: D1Database, workspaceId: string, sear
         return fields(b) - fields(a) || b.score - a.score;
       }).slice(0, Math.max(0, candidateTarget - accepted));
       if (prepared.length) {
-        await db.batch(prepared.map(result => db.prepare(`INSERT INTO finder_results (id,workspace_id,search_id,provider,provider_record_id,name,industry,address,city,phone,email,website,social_url,source_url,business_status,rating,review_count,score,score_reason,opportunity,provenance_json,website_summary,rule_score,rule_score_reason,ai_status,fetched_at,verified_at,latitude,longitude,distance_km,facebook_status)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'pending',?,?,?,?,?,?) ON CONFLICT(search_id,provider,provider_record_id) DO UPDATE SET latitude=excluded.latitude,longitude=excluded.longitude,distance_km=excluded.distance_km,name=excluded.name,industry=excluded.industry,address=excluded.address,city=excluded.city,phone=excluded.phone,email=excluded.email,website=excluded.website,social_url=CASE WHEN finder_results.review_version>0 THEN finder_results.social_url ELSE excluded.social_url END,facebook_status=CASE WHEN finder_results.review_version>0 THEN finder_results.facebook_status ELSE excluded.facebook_status END,source_url=excluded.source_url,business_status=excluded.business_status,rating=excluded.rating,review_count=excluded.review_count,score=CASE WHEN finder_results.review_version>0 THEN finder_results.score ELSE excluded.score END,score_reason=CASE WHEN finder_results.review_version>0 THEN finder_results.score_reason ELSE excluded.score_reason END,opportunity=CASE WHEN finder_results.review_version>0 THEN finder_results.opportunity ELSE excluded.opportunity END,provenance_json=CASE WHEN finder_results.review_version>0 THEN finder_results.provenance_json ELSE excluded.provenance_json END,website_summary=excluded.website_summary,rule_score=CASE WHEN finder_results.review_version>0 THEN finder_results.rule_score ELSE excluded.rule_score END,rule_score_reason=CASE WHEN finder_results.review_version>0 THEN finder_results.rule_score_reason ELSE excluded.rule_score_reason END,ai_status=CASE WHEN finder_results.ai_input_hash IS NULL THEN 'pending' ELSE finder_results.ai_status END,fetched_at=excluded.fetched_at,verified_at=excluded.verified_at,updated_at=CURRENT_TIMESTAMP`)
-          .bind(crypto.randomUUID(), workspaceId, searchId, result.provider, result.providerRecordId, result.name, result.industry, result.address, result.city, result.phone, result.email, result.website, result.socialUrl, result.sourceUrl, result.businessStatus || null, result.rating ?? null, result.reviewCount ?? null, result.score, result.scoreReason, result.opportunity, JSON.stringify(result.provenance), result.websiteSummary, result.score, result.scoreReason, result.fetchedAt, result.verifiedAt, result.latitude ?? null, result.longitude ?? null, result.distanceKm ?? null, result.facebookStatus)));
+        await db.batch(prepared.map(result => db.prepare(`INSERT INTO finder_results (id,workspace_id,search_id,provider,provider_record_id,name,industry,address,city,phone,email,website,social_url,source_url,business_status,rating,review_count,score,score_reason,opportunity,provenance_json,website_summary,rule_score,rule_score_reason,ai_status,fetched_at,verified_at,latitude,longitude,distance_km,facebook_status,channels_json)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'pending',?,?,?,?,?,?,?) ON CONFLICT(search_id,provider,provider_record_id) DO UPDATE SET channels_json=excluded.channels_json,latitude=excluded.latitude,longitude=excluded.longitude,distance_km=excluded.distance_km,name=excluded.name,industry=excluded.industry,address=excluded.address,city=excluded.city,phone=excluded.phone,email=excluded.email,website=excluded.website,social_url=CASE WHEN finder_results.review_version>0 THEN finder_results.social_url ELSE excluded.social_url END,facebook_status=CASE WHEN finder_results.review_version>0 THEN finder_results.facebook_status ELSE excluded.facebook_status END,source_url=excluded.source_url,business_status=excluded.business_status,rating=excluded.rating,review_count=excluded.review_count,score=CASE WHEN finder_results.review_version>0 THEN finder_results.score ELSE excluded.score END,score_reason=CASE WHEN finder_results.review_version>0 THEN finder_results.score_reason ELSE excluded.score_reason END,opportunity=CASE WHEN finder_results.review_version>0 THEN finder_results.opportunity ELSE excluded.opportunity END,provenance_json=CASE WHEN finder_results.review_version>0 THEN finder_results.provenance_json ELSE excluded.provenance_json END,website_summary=excluded.website_summary,rule_score=CASE WHEN finder_results.review_version>0 THEN finder_results.rule_score ELSE excluded.rule_score END,rule_score_reason=CASE WHEN finder_results.review_version>0 THEN finder_results.rule_score_reason ELSE excluded.rule_score_reason END,ai_status=CASE WHEN finder_results.ai_input_hash IS NULL THEN 'pending' ELSE finder_results.ai_status END,fetched_at=excluded.fetched_at,verified_at=excluded.verified_at,updated_at=CURRENT_TIMESTAMP`)
+          .bind(crypto.randomUUID(), workspaceId, searchId, result.provider, result.providerRecordId, result.name, result.industry, result.address, result.city, result.phone, result.email, result.website, result.socialUrl, result.sourceUrl, result.businessStatus || null, result.rating ?? null, result.reviewCount ?? null, result.score, result.scoreReason, result.opportunity, JSON.stringify(result.provenance), result.websiteSummary, result.score, result.scoreReason, result.fetchedAt, result.verifiedAt, result.latitude ?? null, result.longitude ?? null, result.distanceKm ?? null, result.facebookStatus, JSON.stringify(result.channels))));
       }
       const total = await db.prepare('SELECT COUNT(*) total FROM finder_results WHERE search_id=? AND workspace_id=?').bind(searchId, workspaceId).first<{ total: number }>();
       accepted = Number(total?.total || 0);

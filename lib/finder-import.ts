@@ -1,6 +1,8 @@
 import { mapFinderResult, mapFinderSearch } from '@/lib/finder-store';
 import { contactChannel, normalizedIdentity, outreachPlan, prospectScore, readiness, salesOpportunity, sameProspect, type SalesProspect } from '@/lib/finder-sales';
 import { finderImportSchema } from '@/lib/validation';
+import { channelList } from '@/lib/contact-channels';
+import { phoneKey } from '@/lib/phone';
 import { mapLead } from '@/lib/workspace-store';
 
 /** Every lead with the Finder record it came from. One indexed pass, since Finder polls this while a search runs. */
@@ -15,7 +17,7 @@ export async function existingFinderLeads(db: D1Database, workspaceId: string) {
 }
 
 type ExistingLead = Awaited<ReturnType<typeof existingFinderLeads>>[number];
-type LeadIndex = { byRecord: Map<string, number>; byNameCity: Map<string, number[]> };
+type LeadIndex = { byRecord: Map<string, number>; byNameCity: Map<string, number[]>; byPhone: Map<string, number[]> };
 const leadIndexes = new WeakMap<ExistingLead[], LeadIndex>();
 const recordKey = (provider: string, id: string) => `${provider}::${id}`;
 const nameCityKey = (lead: { name?: string; city?: string }) => `${normalizedIdentity(lead.name)}::${normalizedIdentity(lead.city)}`;
@@ -24,12 +26,14 @@ const nameCityKey = (lead: { name?: string; city?: string }) => `${normalizedIde
 function leadIndex(leads: ExistingLead[]) {
   let index = leadIndexes.get(leads);
   if (index) return index;
-  index = { byRecord: new Map(), byNameCity: new Map() };
+  index = { byRecord: new Map(), byNameCity: new Map(), byPhone: new Map() };
   leads.forEach((lead, position) => {
     if (lead.provider && lead.providerRecordId && !index!.byRecord.has(recordKey(lead.provider, lead.providerRecordId))) index!.byRecord.set(recordKey(lead.provider, lead.providerRecordId), position);
     const key = nameCityKey(lead);
     const bucket = index!.byNameCity.get(key);
     if (bucket) bucket.push(position); else index!.byNameCity.set(key, [position]);
+    const phone = phoneKey(lead.phone);
+    if (phone) { const same = index!.byPhone.get(phone); if (same) same.push(position); else index!.byPhone.set(phone, [position]); }
   });
   leadIndexes.set(leads, index);
   return index;
@@ -42,7 +46,13 @@ export function findDuplicate(prospect: SalesProspect, leads: ExistingLead[]) {
   const first = [byRecord, byAddress].filter((position): position is number => position !== undefined).sort((x, y) => x - y)[0];
   return first === undefined ? undefined : leads[first];
 }
-export function possibleDuplicates(prospect: SalesProspect, leads: ExistingLead[]) { return (leadIndex(leads).byNameCity.get(nameCityKey(prospect)) || []).map(position => leads[position]).filter(lead => !sameProspect(prospect, lead)); }
+/** Same name in the same city, or the same phone number: likely the same business, but branches can share both, so a rep confirms. */
+export function possibleDuplicates(prospect: SalesProspect, leads: ExistingLead[]) {
+  const index = leadIndex(leads);
+  const phone = phoneKey(prospect.phone);
+  const positions = [...new Set([...(index.byNameCity.get(nameCityKey(prospect)) || []), ...(phone ? index.byPhone.get(phone) || [] : [])])].sort((a, b) => a - b);
+  return positions.map(position => leads[position]).filter(lead => !sameProspect(prospect, lead));
+}
 
 export async function importFinderResults(db: D1Database, workspaceId: string, actor: { id: string; name: string; role: string }, input: ReturnType<typeof finderImportSchema.parse>) {
   const searchRow = await db.prepare('SELECT * FROM finder_searches WHERE id=? AND workspace_id=?').bind(input.searchId, workspaceId).first<Record<string, unknown>>();
@@ -85,7 +95,7 @@ export async function importFinderResults(db: D1Database, workspaceId: string, a
     const chosen = input.channel === 'Recommended' ? ready ? suggested.channel : 'Review' : input.channel === 'Research' ? 'Review' : input.channel;
     const type = chosen === 'Facebook' ? 'Facebook message' : chosen === 'Phone' ? 'Call' : chosen === 'Email' ? 'Email' : 'Research';
     const title = chosen === 'Review' ? 'Review prospect and contact details' : `Initial ${chosen === 'Facebook' ? 'Facebook' : chosen.toLowerCase()} follow-up`;
-    const notes = `Sales focus: ${search.salesFocus}. ${readiness(result, search.requirements, search.requirementMode)}. ${suggested.reason}\n${chosen === 'Review' ? 'Verify the missing criteria before contacting this business.' : `Draft to review (not sent): ${suggested.draft}`}\nSource: ${result.sourceUrl}\n${result.socialUrl ? `Facebook: ${result.socialUrl}\n` : ''}Research: ${JSON.stringify(result.facebookResearch)}`.slice(0, 2000);
+    const notes = `Sales focus: ${search.salesFocus}. ${readiness(result, search.requirements, search.requirementMode)}. ${suggested.reason}\n${chosen === 'Review' ? 'Verify the missing criteria before contacting this business.' : `Draft to review (not sent): ${suggested.draft}`}\nSource: ${result.sourceUrl}\n${result.socialUrl ? `Facebook: ${result.socialUrl}\n` : ''}${channelList(result.channels).map(item => `${item.label}: ${item.url}\n`).join('')}Research: ${JSON.stringify(result.facebookResearch)}`.slice(0, 2000);
     const statements = [];
     if (!companyMatch) statements.push(db.prepare('INSERT INTO companies (id,workspace_id,name,industry,city,phone,email,website,facebook_url,facebook_status,facebook_reviewed_at,facebook_research_json,owner,finder_provider,finder_record_id,business_address) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(companyId, workspaceId, companyName, result.industry, result.city, result.phone, result.email, result.website || null, result.socialUrl || null, result.facebookStatus, result.facebookVerifiedAt || null, JSON.stringify(result.facebookResearch), owner, result.provider, result.providerRecordId, result.address));
     else statements.push(db.prepare('UPDATE companies SET facebook_url=?,facebook_status=?,facebook_reviewed_at=?,facebook_research_json=?,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?').bind(result.socialUrl || null, result.facebookStatus, result.facebookVerifiedAt || null, JSON.stringify(result.facebookResearch), companyId, workspaceId));

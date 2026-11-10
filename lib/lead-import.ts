@@ -120,6 +120,7 @@ export const leadImportSchema = z.object({
   ownerId: z.string().trim().min(1).max(240),
   status: z.enum(LEAD_IMPORT_STATUSES),
   priority: z.enum(['Low', 'Medium', 'High']),
+  allowPhoneMatches: z.boolean().default(false),
   rows: z.array(z.object({
     line: z.number().int().positive(),
     name: z.string().trim().min(1).max(160),

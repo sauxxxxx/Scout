@@ -12,7 +12,7 @@ import { mapLead } from '@/lib/workspace-store';
 import { guardFinderSearch, seesOnlyOwnRecords } from '@/lib/record-scope';
 import { recordAudit } from '@/lib/audit';
 import { allowRequest, tooManyRequests } from '@/lib/rate-limit';
-import { finderAiRetrySchema, finderFacebookSchema, finderManualProspectSchema, finderImportSchema, finderSearchSchema, validationError } from '@/lib/validation';
+import { finderAiRetrySchema, finderBulkProspectsSchema, finderFacebookSchema, finderManualProspectSchema, finderImportSchema, finderSearchSchema, validationError } from '@/lib/validation';
 
 export const dynamic = 'force-dynamic';
 
@@ -81,7 +81,7 @@ export async function POST(request: Request) {
   try { body = await request.json(); } catch { return Response.json({ error: 'Invalid JSON body.' }, { status: 400 }); }
   if ((body as { action?: string })?.action === 'import') return importResults(request, body);
   const action = (body as { action?: string })?.action;
-  const auth = await authenticateRequest(request, action === 'save' ? 'records:write' : action === 'facebook' || action === 'add-prospect' ? 'records:write' : 'finder:run');
+  const auth = await authenticateRequest(request, action === 'save' ? 'records:write' : action === 'facebook' || action === 'add-prospect' || action === 'add-prospects' ? 'records:write' : 'finder:run');
   if (!auth.ok) return auth.response;
   const hidden = await guardFinderSearch(auth, (body as { searchId?: string })?.searchId);
   if (hidden) return hidden;
@@ -100,6 +100,32 @@ export async function POST(request: Request) {
     await dispatchFinderJob(auth.db, { kind: 'ai', workspaceId: auth.session.workspace.id, searchId: parsed.data.searchId, resultId: parsed.data.resultId });
     const lead = await auth.db.prepare('SELECT l.* FROM leads l JOIN finder_results r ON r.imported_lead_id=l.id WHERE r.id=? AND r.workspace_id=? AND l.workspace_id=?').bind(parsed.data.resultId, auth.session.workspace.id, auth.session.workspace.id).first<Record<string, unknown>>();
     return Response.json({ ...await finderPayload(auth.db, auth.session.workspace.id, parsed.data.searchId, ownName(auth.session)), updatedLeads: lead ? [mapLead(lead)] : [] });
+  }
+  if (action === 'add-prospects') {
+    const parsed = finderBulkProspectsSchema.safeParse(body); if (!parsed.success) return validationError(parsed.error);
+    const value = parsed.data; const workspaceId = auth.session.workspace.id;
+    const searchRow = await auth.db.prepare('SELECT * FROM finder_searches WHERE id=? AND workspace_id=?').bind(value.searchId, workspaceId).first<Record<string, unknown>>();
+    if (!searchRow) return Response.json({ error: 'Search not found.' }, { status: 404 });
+    const search = mapFinderSearch(searchRow);
+    // Pages already in this search are skipped, so pasting the same list twice adds nothing new.
+    const known = await auth.db.prepare("SELECT social_url FROM finder_results WHERE search_id=? AND workspace_id=? AND social_url<>''").bind(search.id, workspaceId).all<{ social_url: string }>();
+    const seen = new Set(known.results.map(row => normalizeFacebookPageUrl(row.social_url)).filter(Boolean));
+    const now = new Date().toISOString(); const added: string[] = []; const skipped: string[] = [];
+    const statements: D1PreparedStatement[] = [];
+    for (const item of value.prospects) {
+      const facebook = normalizeFacebookPageUrl(item.facebookUrl);
+      if (seen.has(facebook)) { skipped.push(item.name); continue; }
+      seen.add(facebook);
+      const assessment = assessPlace({}, { email: '', socialUrl: facebook, summary: '' }, search.salesFocus);
+      const id = crypto.randomUUID();
+      const provenance = [{ field: 'facebook', provider: 'Sales-submitted page', sourceUrl: facebook, retrievedAt: now }, { field: 'location', provider: 'Sales area review', sourceUrl: facebook, retrievedAt: now }];
+      statements.push(auth.db.prepare(`INSERT INTO finder_results (id,workspace_id,search_id,provider,provider_record_id,name,industry,address,city,phone,email,website,social_url,source_url,score,score_reason,rule_score,rule_score_reason,opportunity,provenance_json,fetched_at,verified_at,facebook_status,ai_status) VALUES (?,?,?,?,?,?,?,'',?,'','','',?,?,?,?,?,?,?,?,?,?,'possible','pending') ON CONFLICT(search_id,provider,provider_record_id) DO NOTHING`)
+        .bind(id, workspaceId, search.id, 'Sales review', `${facebook}|${normalizedIdentity(item.name)}|${normalizedIdentity(value.city)}|`, item.name, search.industry, value.city, facebook, facebook, assessment.score, assessment.scoreReason, assessment.score, assessment.scoreReason, assessment.opportunity, JSON.stringify(provenance), now, now));
+      added.push(id);
+    }
+    if (statements.length) await auth.db.batch([...statements, auth.db.prepare('UPDATE finder_searches SET found_count=(SELECT COUNT(*) FROM finder_results WHERE search_id=? AND workspace_id=?),updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?').bind(search.id, workspaceId, search.id, workspaceId)]);
+    for (const id of added) await dispatchFinderJob(auth.db, { kind: 'ai', workspaceId, searchId: search.id, resultId: id });
+    return Response.json({ ...await finderPayload(auth.db, workspaceId, search.id, ownName(auth.session)), addedResultIds: added, skipped }, { status: 201 });
   }
   if ((body as { action?: string })?.action === 'add-prospect') {
     const parsed = finderManualProspectSchema.safeParse(body); if (!parsed.success) return validationError(parsed.error);
