@@ -6,7 +6,7 @@ import { FINDER_DEFAULT_LEADS } from '@/lib/finder-cells';
 export const DEFAULT_WORKSPACE_ID = 'scout-default';
 
 /** Bump when anything in migrateFoundationSchema changes. Requests then skip the whole setup unless this moved. */
-export const SCHEMA_VERSION = 21;
+export const SCHEMA_VERSION = 26;
 
 const createUsersTable = `CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
@@ -284,7 +284,7 @@ async function migrateFoundationSchema(db: D1Database) {
 
   await addColumns(db, 'leads', {
     id: 'TEXT', workspace_id: 'TEXT', company_id: 'TEXT', primary_contact_id: 'TEXT', version: 'INTEGER NOT NULL DEFAULT 1', created_at: 'TEXT',
-    finder_provider: 'TEXT', finder_record_id: 'TEXT', business_address: "TEXT NOT NULL DEFAULT ''", country: "TEXT NOT NULL DEFAULT 'PH'", last_touch_at: 'TEXT', changed_at: 'TEXT',
+    finder_provider: 'TEXT', finder_record_id: 'TEXT', business_address: "TEXT NOT NULL DEFAULT ''", country: "TEXT NOT NULL DEFAULT 'PH'", last_touch_at: 'TEXT', changed_at: 'TEXT', prospect_at: 'TEXT',
   });
   await addColumns(db, 'opportunities', { closed_at: 'TEXT', proposal_at: 'TEXT' });
   await addColumns(db, 'tasks', {
@@ -352,6 +352,20 @@ async function migrateFoundationSchema(db: D1Database) {
     db.prepare('CREATE INDEX IF NOT EXISTS idx_opportunities_stage ON opportunities(workspace_id, stage, archived)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_opportunities_company ON opportunities(workspace_id, company_id)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_tasks_workspace_due_at ON tasks(workspace_id, due_at, status)'),
+    // Lead, contact and report queries name these, so out-of-date table statistics can never turn an ID lookup into a scan of the whole table.
+    db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_companies_id ON companies(id)'),
+    db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_id ON contacts(id)'),
+    // The activity list clears out old deleted entries on every load, and imports look up names ignoring capitals.
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_activities_deleted ON activities(workspace_id,deleted_at) WHERE deleted_at IS NOT NULL'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_leads_lower_name ON leads(workspace_id,lower(name))'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_companies_lower_name ON companies(workspace_id,lower(name))'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_activities_occurred ON activities(workspace_id,occurred_at)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_companies_finder_identity ON companies(workspace_id,finder_provider,finder_record_id) WHERE finder_provider IS NOT NULL'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_leads_prospect ON leads(workspace_id,prospect_at) WHERE prospect_at IS NOT NULL'),
+    // A lead counts as a prospect from the first time anyone sets it to Prospect, however it was saved.
+    db.prepare("CREATE TRIGGER IF NOT EXISTS leads_prospect_on_insert AFTER INSERT ON leads WHEN NEW.status='Prospect' AND NEW.prospect_at IS NULL BEGIN UPDATE leads SET prospect_at=CURRENT_TIMESTAMP WHERE rowid=NEW.rowid; END"),
+    db.prepare("CREATE TRIGGER IF NOT EXISTS leads_prospect_on_update AFTER UPDATE OF status ON leads WHEN NEW.status='Prospect' AND NEW.prospect_at IS NULL BEGIN UPDATE leads SET prospect_at=CURRENT_TIMESTAMP WHERE rowid=NEW.rowid; END"),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_finder_results_imported_lead ON finder_results(workspace_id, imported_lead_id) WHERE imported_lead_id IS NOT NULL'),
   ]);
   await backfillCoreCrm(db);
   await db.prepare("UPDATE tasks SET due_at=CASE WHEN due='Today' THEN date('now') WHEN due='Tomorrow' THEN date('now','+1 day') WHEN due='Overdue' THEN date('now','-1 day') ELSE due_at END WHERE due_at IS NULL").run();

@@ -3,16 +3,46 @@ import { contactChannel, normalizedIdentity, outreachPlan, prospectScore, readin
 import { finderImportSchema } from '@/lib/validation';
 import { mapLead } from '@/lib/workspace-store';
 
+/** Every lead with the Finder record it came from. One indexed pass, since Finder polls this while a search runs. */
 export async function existingFinderLeads(db: D1Database, workspaceId: string) {
-  const rows = await db.prepare(`SELECT l.id,COALESCE((SELECT r.name FROM finder_results r WHERE r.workspace_id=l.workspace_id AND r.imported_lead_id=l.id LIMIT 1),l.name) name,l.city,l.phone,l.email,
-    COALESCE(l.finder_provider,(SELECT r.provider FROM finder_results r WHERE r.workspace_id=l.workspace_id AND r.imported_lead_id=l.id LIMIT 1)) finder_provider,
-    COALESCE(l.finder_record_id,(SELECT r.provider_record_id FROM finder_results r WHERE r.workspace_id=l.workspace_id AND r.imported_lead_id=l.id LIMIT 1)) finder_record_id,
-    COALESCE(NULLIF(l.business_address,''),(SELECT r.address FROM finder_results r WHERE r.workspace_id=l.workspace_id AND r.imported_lead_id=l.id LIMIT 1)) business_address
-    FROM leads l WHERE l.workspace_id=?`).bind(workspaceId).all<Record<string, unknown>>();
+  const rows = await db.prepare(`SELECT l.id,COALESCE(r.name,l.name) name,l.city,l.phone,l.email,COALESCE(l.finder_provider,r.provider) finder_provider,
+    COALESCE(l.finder_record_id,r.provider_record_id) finder_record_id,COALESCE(NULLIF(l.business_address,''),r.address) business_address
+    FROM leads l
+    LEFT JOIN (SELECT imported_lead_id,MIN(rowid) rid FROM finder_results WHERE workspace_id=? AND imported_lead_id IS NOT NULL GROUP BY imported_lead_id) f ON f.imported_lead_id=l.id
+    LEFT JOIN finder_results r ON r.rowid=f.rid
+    WHERE l.workspace_id=?`).bind(workspaceId, workspaceId).all<Record<string, unknown>>();
   return rows.results.map(row => ({ id: String(row.id), name: String(row.name), city: String(row.city || ''), address: String(row.business_address || ''), provider: String(row.finder_provider || ''), providerRecordId: String(row.finder_record_id || ''), phone: String(row.phone || ''), email: String(row.email || ''), website: '', socialUrl: '' }));
 }
-export function findDuplicate(prospect: SalesProspect, leads: Awaited<ReturnType<typeof existingFinderLeads>>) { return leads.find(lead => sameProspect(prospect, lead)); }
-export function possibleDuplicates(prospect: SalesProspect, leads: Awaited<ReturnType<typeof existingFinderLeads>>) { return leads.filter(lead => !sameProspect(prospect, lead) && normalizedIdentity(lead.name) === normalizedIdentity(prospect.name) && normalizedIdentity(lead.city) === normalizedIdentity(prospect.city)); }
+
+type ExistingLead = Awaited<ReturnType<typeof existingFinderLeads>>[number];
+type LeadIndex = { byRecord: Map<string, number>; byNameCity: Map<string, number[]> };
+const leadIndexes = new WeakMap<ExistingLead[], LeadIndex>();
+const recordKey = (provider: string, id: string) => `${provider}::${id}`;
+const nameCityKey = (lead: { name?: string; city?: string }) => `${normalizedIdentity(lead.name)}::${normalizedIdentity(lead.city)}`;
+
+/** Built once per lead list, so matching a search's results costs one lookup each rather than a pass over every lead. */
+function leadIndex(leads: ExistingLead[]) {
+  let index = leadIndexes.get(leads);
+  if (index) return index;
+  index = { byRecord: new Map(), byNameCity: new Map() };
+  leads.forEach((lead, position) => {
+    if (lead.provider && lead.providerRecordId && !index!.byRecord.has(recordKey(lead.provider, lead.providerRecordId))) index!.byRecord.set(recordKey(lead.provider, lead.providerRecordId), position);
+    const key = nameCityKey(lead);
+    const bucket = index!.byNameCity.get(key);
+    if (bucket) bucket.push(position); else index!.byNameCity.set(key, [position]);
+  });
+  leadIndexes.set(leads, index);
+  return index;
+}
+
+export function findDuplicate(prospect: SalesProspect, leads: ExistingLead[]) {
+  const index = leadIndex(leads);
+  const byRecord = prospect.provider && prospect.providerRecordId ? index.byRecord.get(recordKey(prospect.provider, prospect.providerRecordId)) : undefined;
+  const byAddress = (index.byNameCity.get(nameCityKey(prospect)) || []).find(position => sameProspect(prospect, leads[position]));
+  const first = [byRecord, byAddress].filter((position): position is number => position !== undefined).sort((x, y) => x - y)[0];
+  return first === undefined ? undefined : leads[first];
+}
+export function possibleDuplicates(prospect: SalesProspect, leads: ExistingLead[]) { return (leadIndex(leads).byNameCity.get(nameCityKey(prospect)) || []).map(position => leads[position]).filter(lead => !sameProspect(prospect, lead)); }
 
 export async function importFinderResults(db: D1Database, workspaceId: string, actor: { id: string; name: string; role: string }, input: ReturnType<typeof finderImportSchema.parse>) {
   const searchRow = await db.prepare('SELECT * FROM finder_searches WHERE id=? AND workspace_id=?').bind(input.searchId, workspaceId).first<Record<string, unknown>>();

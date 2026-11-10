@@ -73,7 +73,7 @@ export async function logSentEmail(db: D1Database, email: SentEmail) {
   for (const address of recipientsOf(email.to, email.cc)) {
     const lead = await db.prepare(`SELECT l.id,l.name,l.company_id,
       (SELECT ct.id FROM contacts ct WHERE ct.workspace_id=l.workspace_id AND ct.company_id=l.company_id AND ct.archived=0 AND LOWER(ct.email)=?1 LIMIT 1) contact
-      FROM leads l LEFT JOIN companies c ON c.id=l.company_id
+      FROM leads l LEFT JOIN companies c INDEXED BY idx_companies_id ON c.id=l.company_id
       WHERE l.workspace_id=?2 AND l.archived=0 AND (LOWER(l.email)=?1 OR LOWER(c.email)=?1 OR EXISTS (SELECT 1 FROM contacts ct WHERE ct.workspace_id=l.workspace_id AND ct.company_id=l.company_id AND ct.archived=0 AND LOWER(ct.email)=?1))
       ORDER BY l.owner=?3 DESC,COALESCE(l.changed_at,l.updated_at) DESC LIMIT 1`).bind(address, rep.workspace_id, rep.name).first<MatchedLead>();
     if (lead) leads.set(lead.id, lead);

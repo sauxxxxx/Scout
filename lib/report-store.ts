@@ -27,20 +27,20 @@ function statements(db: D1Database, scope: ReportScope, from: string, to: string
   const owners = scope.owner ? [scope.owner] : [];
   return [
     db.prepare(`SELECT o.owner owner,date(o.closed_at,?) day,SUM(o.stage='Won') won_count,SUM(CASE WHEN o.stage='Won' THEN o.value ELSE 0 END) won_value,SUM(o.stage='Lost') lost_count
-      FROM opportunities o LEFT JOIN companies c ON c.id=o.company_id WHERE o.workspace_id=? AND o.archived=0 AND o.stage IN ('Won','Lost') AND date(o.closed_at,?) BETWEEN ? AND ?${owner('o.owner')}${source} GROUP BY 1,2`)
+      FROM opportunities o LEFT JOIN companies c INDEXED BY idx_companies_id ON c.id=o.company_id WHERE o.workspace_id=? AND o.archived=0 AND o.stage IN ('Won','Lost') AND date(o.closed_at,?) BETWEEN ? AND ?${owner('o.owner')}${source} GROUP BY 1,2`)
       .bind(zone, scope.workspaceId, zone, from, to, ...owners),
-    db.prepare(`SELECT l.owner owner,date(l.created_at,?) day,COUNT(*) total FROM leads l LEFT JOIN companies c ON c.id=l.company_id
-      WHERE l.workspace_id=? AND l.archived=0 AND date(l.created_at,?) BETWEEN ? AND ?${owner('l.owner')}${source} GROUP BY 1,2`)
+    db.prepare(`SELECT l.owner owner,date(l.prospect_at,?) day,COUNT(*) total FROM leads l LEFT JOIN companies c INDEXED BY idx_companies_id ON c.id=l.company_id
+      WHERE l.workspace_id=? AND l.archived=0 AND l.prospect_at IS NOT NULL AND date(l.prospect_at,?) BETWEEN ? AND ?${owner('l.owner')}${source} GROUP BY 1,2`)
       .bind(zone, scope.workspaceId, zone, from, to, ...owners),
-    db.prepare(`SELECT a.owner owner,substr(a.occurred_at,1,10) day,LOWER(a.type) type,COUNT(*) total FROM activities a LEFT JOIN companies c ON c.id=a.company_id
-      WHERE a.workspace_id=? AND ${completedActivity} AND substr(a.occurred_at,1,10) BETWEEN ? AND ?${owner('a.owner')}${source} GROUP BY 1,2,3`)
+    db.prepare(`SELECT a.owner owner,substr(a.occurred_at,1,10) day,LOWER(a.type) type,COUNT(*) total FROM activities a LEFT JOIN companies c INDEXED BY idx_companies_id ON c.id=a.company_id
+      WHERE a.workspace_id=? AND ${completedActivity} AND a.occurred_at BETWEEN ? AND ?||'~'${owner('a.owner')}${source} GROUP BY 1,2,3`)
       .bind(scope.workspaceId, from, to, ...owners),
-    db.prepare(`SELECT t.owner owner,date(t.completed_at,?) day,COUNT(*) total FROM tasks t LEFT JOIN companies c ON c.id=t.company_id
+    db.prepare(`SELECT t.owner owner,date(t.completed_at,?) day,COUNT(*) total FROM tasks t LEFT JOIN companies c INDEXED BY idx_companies_id ON c.id=t.company_id
       WHERE t.workspace_id=? AND ${followUpTasks} AND date(t.completed_at,?) BETWEEN ? AND ?${owner('t.owner')}${source} GROUP BY 1,2`)
       .bind(zone, scope.workspaceId, zone, from, to, ...owners),
-    db.prepare(`SELECT a.owner owner,substr(a.occurred_at,1,10) day,COALESCE(a.lead_id,a.uid) item FROM activities a LEFT JOIN companies c ON c.id=a.company_id
-      WHERE a.workspace_id=? AND ${completedActivity} AND ${proposalActivity} AND substr(a.occurred_at,1,10) BETWEEN ? AND ?${owner('a.owner')}${source}
-      UNION ALL SELECT o.owner owner,date(o.proposal_at,?) day,COALESCE(o.lead_id,o.id) item FROM opportunities o LEFT JOIN companies c ON c.id=o.company_id
+    db.prepare(`SELECT a.owner owner,substr(a.occurred_at,1,10) day,COALESCE(a.lead_id,a.uid) item FROM activities a LEFT JOIN companies c INDEXED BY idx_companies_id ON c.id=a.company_id
+      WHERE a.workspace_id=? AND ${completedActivity} AND ${proposalActivity} AND a.occurred_at BETWEEN ? AND ?||'~'${owner('a.owner')}${source}
+      UNION ALL SELECT o.owner owner,date(o.proposal_at,?) day,COALESCE(o.lead_id,o.id) item FROM opportunities o LEFT JOIN companies c INDEXED BY idx_companies_id ON c.id=o.company_id
       WHERE o.workspace_id=? AND o.archived=0 AND date(o.proposal_at,?) BETWEEN ? AND ?${owner('o.owner')}${source}`)
       .bind(scope.workspaceId, from, to, ...owners, zone, scope.workspaceId, zone, from, to, ...owners),
   ];
@@ -84,20 +84,20 @@ export async function loadReportRecords(db: D1Database, scope: ReportScope, metr
   const owner = (column: string) => scope.owner ? ` AND ${column}=?` : '';
   const owners = scope.owner ? [scope.owner] : [];
   const rows = async (sql: string, ...values: unknown[]) => (await db.prepare(`${sql} LIMIT ${RECORD_LIMIT}`).bind(...values).all<ReportRecord>()).results;
-  if (metric === 'newLeads') return rows(`SELECT l.id key,date(l.created_at,?) date,l.owner rep,l.name lead,l.industry||' · '||l.city detail FROM leads l LEFT JOIN companies c ON c.id=l.company_id
-    WHERE l.workspace_id=? AND l.archived=0 AND date(l.created_at,?) BETWEEN ? AND ?${owner('l.owner')}${source} ORDER BY 2 DESC,l.name`, zone, scope.workspaceId, zone, from, to, ...owners);
-  if (metric === 'followUps') return rows(`SELECT t.uid key,date(t.completed_at,?) date,t.owner rep,t.lead lead,t.title detail FROM tasks t LEFT JOIN companies c ON c.id=t.company_id
+  if (metric === 'newLeads') return rows(`SELECT l.id key,date(l.prospect_at,?) date,l.owner rep,l.name lead,l.industry||' · '||l.city detail FROM leads l LEFT JOIN companies c INDEXED BY idx_companies_id ON c.id=l.company_id
+    WHERE l.workspace_id=? AND l.archived=0 AND l.prospect_at IS NOT NULL AND date(l.prospect_at,?) BETWEEN ? AND ?${owner('l.owner')}${source} ORDER BY 2 DESC,l.name`, zone, scope.workspaceId, zone, from, to, ...owners);
+  if (metric === 'followUps') return rows(`SELECT t.uid key,date(t.completed_at,?) date,t.owner rep,t.lead lead,t.title detail FROM tasks t LEFT JOIN companies c INDEXED BY idx_companies_id ON c.id=t.company_id
     WHERE t.workspace_id=? AND ${followUpTasks} AND date(t.completed_at,?) BETWEEN ? AND ?${owner('t.owner')}${source} ORDER BY 2 DESC,t.title`, zone, scope.workspaceId, zone, from, to, ...owners);
-  if (metric === 'wonCount') return rows(`SELECT o.id key,date(o.closed_at,?) date,o.owner rep,COALESCE(l.name,c.name,o.name) lead,o.name detail FROM opportunities o LEFT JOIN companies c ON c.id=o.company_id LEFT JOIN leads l ON l.id=o.lead_id
+  if (metric === 'wonCount') return rows(`SELECT o.id key,date(o.closed_at,?) date,o.owner rep,COALESCE(l.name,c.name,o.name) lead,o.name detail FROM opportunities o LEFT JOIN companies c INDEXED BY idx_companies_id ON c.id=o.company_id LEFT JOIN leads l ON l.id=o.lead_id
     WHERE o.workspace_id=? AND o.archived=0 AND o.stage='Won' AND date(o.closed_at,?) BETWEEN ? AND ?${owner('o.owner')}${source} ORDER BY 2 DESC,o.name`, zone, scope.workspaceId, zone, from, to, ...owners);
   if (metric === 'proposals') {
-    const found = await rows(`SELECT a.uid key,COALESCE(a.lead_id,a.uid) item,substr(a.occurred_at,1,10) day,substr(a.occurred_at,1,10) date,a.owner rep,a.lead lead,a.detail detail FROM activities a LEFT JOIN companies c ON c.id=a.company_id
-      WHERE a.workspace_id=? AND ${completedActivity} AND ${proposalActivity} AND substr(a.occurred_at,1,10) BETWEEN ? AND ?${owner('a.owner')}${source}
-      UNION ALL SELECT o.id key,COALESCE(o.lead_id,o.id) item,date(o.proposal_at,?) day,date(o.proposal_at,?) date,o.owner rep,COALESCE(l.name,c.name,o.name) lead,o.name detail FROM opportunities o LEFT JOIN companies c ON c.id=o.company_id LEFT JOIN leads l ON l.id=o.lead_id
+    const found = await rows(`SELECT a.uid key,COALESCE(a.lead_id,a.uid) item,substr(a.occurred_at,1,10) day,substr(a.occurred_at,1,10) date,a.owner rep,a.lead lead,a.detail detail FROM activities a LEFT JOIN companies c INDEXED BY idx_companies_id ON c.id=a.company_id
+      WHERE a.workspace_id=? AND ${completedActivity} AND ${proposalActivity} AND a.occurred_at BETWEEN ? AND ?||'~'${owner('a.owner')}${source}
+      UNION ALL SELECT o.id key,COALESCE(o.lead_id,o.id) item,date(o.proposal_at,?) day,date(o.proposal_at,?) date,o.owner rep,COALESCE(l.name,c.name,o.name) lead,o.name detail FROM opportunities o LEFT JOIN companies c INDEXED BY idx_companies_id ON c.id=o.company_id LEFT JOIN leads l ON l.id=o.lead_id
       WHERE o.workspace_id=? AND o.archived=0 AND date(o.proposal_at,?) BETWEEN ? AND ?${owner('o.owner')}${source} ORDER BY 3 DESC`, scope.workspaceId, from, to, ...owners, zone, zone, scope.workspaceId, zone, from, to, ...owners) as (ReportRecord & { item: string; day: string })[];
     return firstProposals(found).map(({ key, date, rep, lead, detail }) => ({ key, date, rep, lead, detail })).sort((a, b) => b.date.localeCompare(a.date));
   }
   const types = { calls: ['call', 'callback'], emails: ['email'], meetings: ['meeting'] }[metric];
-  return rows(`SELECT a.uid key,substr(a.occurred_at,1,10) date,a.owner rep,a.lead lead,a.detail detail FROM activities a LEFT JOIN companies c ON c.id=a.company_id
-    WHERE a.workspace_id=? AND ${completedActivity} AND LOWER(a.type) IN (${types.map(() => '?').join(',')}) AND substr(a.occurred_at,1,10) BETWEEN ? AND ?${owner('a.owner')}${source} ORDER BY a.occurred_at DESC`, scope.workspaceId, ...types, from, to, ...owners);
+  return rows(`SELECT a.uid key,substr(a.occurred_at,1,10) date,a.owner rep,a.lead lead,a.detail detail FROM activities a LEFT JOIN companies c INDEXED BY idx_companies_id ON c.id=a.company_id
+    WHERE a.workspace_id=? AND ${completedActivity} AND LOWER(a.type) IN (${types.map(() => '?').join(',')}) AND a.occurred_at BETWEEN ? AND ?||'~'${owner('a.owner')}${source} ORDER BY a.occurred_at DESC`, scope.workspaceId, ...types, from, to, ...owners);
 }

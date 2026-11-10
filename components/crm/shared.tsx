@@ -6,6 +6,7 @@ import { FiCheck, FiChevronDown, FiChevronLeft, FiChevronRight, FiFlag } from 'r
 import { defaultCustomization, statusLabelOf, type Customization } from '@/lib/customization';
 import { defaultViewSettings, type ViewSettings } from '@/lib/view-settings';
 import { localIso } from '@/lib/task-dates';
+import { leadStatuses } from '@/lib/validation';
 import { useWorkspaceMembers } from '@/components/WorkspaceMembers';
 import { composeWindowFeatures, gmailComposeUrl } from '@/lib/gmail';
 import { pageNumbers, pageSizes, pageWindow, type PageSize } from '@/lib/pagination';
@@ -65,7 +66,7 @@ export function OwnerSelect({value,onChange,allLabel,placeholder}:{value:string;
 }
 
 export function StatusSelect({value,onChange}:{value:string;onChange:(value:string)=>void}) {
-  const {statusLabel}=useCustomization();const [open,setOpen]=useState(false); const options=useMemo(()=>['New','Contacted','Interested','Follow-up','Proposal','Negotiation','Won','Lost'],[]); const trigger=useRef<HTMLButtonElement>(null); const position=useFloatingMenu(open,trigger,options); const statusClass=(name:string)=>name.toLowerCase().replace('-','');
+  const {statusLabel}=useCustomization();const [open,setOpen]=useState(false); const options=useMemo<string[]>(()=>[...leadStatuses],[]); const trigger=useRef<HTMLButtonElement>(null); const position=useFloatingMenu(open,trigger,options); const statusClass=(name:string)=>name.toLowerCase().replace('-','');
   const menu=open&&position&&<div className={`select-menu status-menu floating-select-menu placement-${position.placement}`} style={{top:position.top,bottom:position.bottom,left:position.left,width:position.width,maxHeight:position.maxHeight}} role="listbox" onMouseDown={e=>e.preventDefault()}>{options.map(option=><button type="button" role="option" aria-selected={option===value} onClick={()=>{onChange(option);setOpen(false)}} key={option}><span><i className={`status-dot ${statusClass(option)}`}/>{statusLabel(option)}</span>{option===value&&<FiCheck/>}</button>)}</div>;
   return <div className="row-status-select" onClick={e=>e.stopPropagation()} onBlur={e=>!e.currentTarget.contains(e.relatedTarget)&&setOpen(false)}><button ref={trigger} type="button" className={`row-status-trigger status-pill ${statusClass(value)}`} aria-haspopup="listbox" aria-expanded={open} onClick={()=>setOpen(v=>!v)}><span>{statusLabel(value)}</span><FiChevronDown/></button>{menu&&createPortal(menu,document.body)}</div>
 }

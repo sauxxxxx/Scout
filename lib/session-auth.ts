@@ -9,6 +9,10 @@ export async function hashSessionToken(token: string) {
   return bytesToHex(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))));
 }
 
+/** Set when someone signs out on their own computer, so the automatic local sign-in stays off until they ask for it back. */
+export const LOCAL_SIGNED_OUT_COOKIE = 'scout_local_signed_out';
+export const isLocalRequest = (request: Request) => ['localhost', '127.0.0.1'].includes(new URL(request.url).hostname);
+
 export function cookieValue(request: Request, name: string) {
   const entry = request.headers.get('cookie')?.split(';').map(part => part.trim()).find(part => part.startsWith(`${name}=`));
   return entry ? decodeURIComponent(entry.slice(name.length + 1)) : null;

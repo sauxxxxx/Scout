@@ -69,13 +69,10 @@ export function ScoutAuth({ message }: { message?: string }) {
   const roleName = invite?.roleLabel ? invite.roleLabel.charAt(0).toUpperCase() + invite.roleLabel.slice(1) : 'a member';
   const closedInvite = !invite || pendingInvite ? '' : invite.status === 'expired' ? `This invitation has expired. Ask ${invite.inviterName} for a new one.` : invite.status === 'revoked' ? 'This invitation was revoked. Ask your workspace owner for a new one.' : invite.status === 'accepted' ? 'This invitation has already been used. Sign in below.' : 'This invitation link is not valid.';
 
-  return <main className="scout-auth-page"><div className="scout-auth-bento">
-    <aside className="scout-auth-brand">
-      <div className={`scout-auth-mark${branding?.logoUrl ? ' has-logo' : ''}`}><ScoutLogo logoUrl={branding?.logoUrl} />{!branding?.logoUrl && <span>Scout</span>}</div>
-      <p className="scout-auth-line">Find them. <span>Follow up.</span> <mark>Close.</mark></p>
-    </aside>
+  return <main className="scout-auth-page">
     <section className="scout-auth-card" aria-labelledby="scout-auth-title">
-      <h1 id="scout-auth-title">{pendingInvite ? `Join ${invite?.workspaceName}` : 'Sign in'}</h1>
+      <div className={`scout-auth-mark${branding?.logoUrl ? ' has-logo' : ''}`}><ScoutLogo logoUrl={branding?.logoUrl} />{!branding?.logoUrl && <span>Scout</span>}</div>
+      <h1 id="scout-auth-title">{pendingInvite ? `Join ${invite?.workspaceName}` : 'Sign in to Scout'}</h1>
       {pendingInvite
         ? <p>{invite?.inviterName} invited you as {roleName}. Continue with the Google account for <strong>{invite?.emailHint}</strong>.</p>
         : <p>{branding?.welcomeMessage || 'Scout is invitation-only. Use the Google account your workspace added.'}</p>}
@@ -90,8 +87,10 @@ export function ScoutAuth({ message }: { message?: string }) {
 
       {!clientId && !loading && <div className="scout-auth-error" role="alert">Google sign-in isn&apos;t set up yet. Ask your workspace owner.</div>}
       {error && <div className="scout-auth-error" role="alert">{error}</div>}
-      {message && !message.toLowerCase().includes('authentication required') && <small className="scout-auth-message">{message}</small>}
-      {!pendingInvite && <small className="scout-auth-help">No access yet? Ask your workspace owner.</small>}
+      {message && !message.toLowerCase().includes('authentication required') && <div className="scout-auth-error" role="alert">{message}</div>}
+      {!pendingInvite && <p className="scout-auth-help">No access yet? Ask your workspace owner.</p>}
     </section>
-  </div></main>;
+    <p className="scout-auth-tagline">Find them. Follow up. <mark>Close.</mark></p>
+    {['localhost', '127.0.0.1'].includes(window.location.hostname) && <a className="scout-auth-local" href="/api/auth/local">Continue as local developer</a>}
+  </main>;
 }

@@ -1,5 +1,5 @@
-export const leadColumns = 'leads.*,companies.name company_name,companies.industry company_industry,companies.city company_city,companies.phone company_phone,companies.email company_email,contacts.name primary_contact_name,contacts.phone primary_contact_phone,contacts.email primary_contact_email';
-export const leadJoins = 'FROM leads LEFT JOIN companies ON companies.id=leads.company_id LEFT JOIN contacts ON contacts.id=leads.primary_contact_id';
+export const leadColumns = 'leads.*,companies.name company_name,companies.industry company_industry,companies.city company_city,companies.phone company_phone,companies.email company_email,companies.facebook_url company_facebook_url,contacts.name primary_contact_name,contacts.phone primary_contact_phone,contacts.email primary_contact_email';
+export const leadJoins = 'FROM leads LEFT JOIN companies INDEXED BY idx_companies_id ON companies.id=leads.company_id LEFT JOIN contacts INDEXED BY idx_contacts_id ON contacts.id=leads.primary_contact_id';
 
 const sortColumns: Record<string, string> = { name: 'COALESCE(companies.name,leads.name)', status: 'leads.status', score: 'leads.score', owner: 'leads.owner', next: 'leads.next', lastTouch: 'leads.last_touch_at', recent: 'COALESCE(leads.changed_at,leads.updated_at)' };
 

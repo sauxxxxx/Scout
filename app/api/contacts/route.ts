@@ -8,7 +8,7 @@ export async function GET(request:Request){
   const clauses=['contacts.workspace_id=?','contacts.archived=0'];const values:(string|number)[]=[session.workspace.id];
   const query=params.get('query')?.trim().toLowerCase();if(query){clauses.push("LOWER(contacts.name||' '||contacts.email||' '||contacts.phone||' '||companies.name) LIKE ?");values.push(`%${query.replace(/[%_]/g,'')}%`)}
   if(seesOnlyOwnRecords(session)){const scope=ownScope(session.workspace.id,session.user.name);clauses.push(`(companies.owner=? OR contacts.company_id IN (SELECT company_id FROM leads WHERE ${scope.sql}))`);values.push(session.user.name,...scope.values)}
-  const where=clauses.join(' AND ');const joins='FROM contacts JOIN companies ON companies.id=contacts.company_id';
+  const where=clauses.join(' AND ');const joins='FROM contacts JOIN companies INDEXED BY idx_companies_id ON companies.id=contacts.company_id';
   const [rows,count,companyRows]=await db.batch([
     db.prepare(`SELECT contacts.* ${joins} WHERE ${where} ORDER BY contacts.name LIMIT ? OFFSET ?`).bind(...values,pageSize,offset),
     db.prepare(`SELECT COUNT(*) total ${joins} WHERE ${where}`).bind(...values),

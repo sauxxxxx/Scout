@@ -24,7 +24,7 @@ export async function GET(request: Request) {
   const { db, session } = auth;
   const workspaceId = session.workspace.id;
   const since = new URL(request.url).searchParams.get('since');
-  const opportunitySelect = 'SELECT o.*,CASE WHEN c.finder_provider IS NOT NULL THEN 1 ELSE 0 END from_finder FROM opportunities o LEFT JOIN companies c ON c.id=o.company_id WHERE o.workspace_id=?1';
+  const opportunitySelect = 'SELECT o.*,CASE WHEN c.finder_provider IS NOT NULL THEN 1 ELSE 0 END from_finder FROM opportunities o LEFT JOIN companies c INDEXED BY idx_companies_id ON c.id=o.company_id WHERE o.workspace_id=?1';
   const statements = since ? [
     db.prepare(`SELECT ${leadColumns} ${leadJoins} WHERE leads.workspace_id=?1 AND leads.updated_at>=?2`).bind(workspaceId, since),
     db.prepare('SELECT * FROM tasks WHERE workspace_id=?1 AND updated_at>=?2').bind(workspaceId, since),

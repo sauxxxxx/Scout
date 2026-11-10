@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { FiCalendar, FiCheck, FiChevronRight, FiColumns, FiFileText, FiFilter, FiList, FiPlus, FiSearch, FiSliders, FiX } from 'react-icons/fi';
 import { formatDate } from '@/lib/format';
+import { leadStatuses } from '@/lib/validation';
 import { useWorkspaceMembers } from '@/components/WorkspaceMembers';
 import { profileDefaults, type ProfileUpdate } from '@/lib/profile';
 import type { Company, Contact, Opportunity, Lead, ActivityEntry, TaskItem } from '@/lib/crm-types';
@@ -20,7 +21,7 @@ export function PipelineWorkspace({view,setView,opportunities,...props}:{view:st
 export function OpportunityPipeline({opportunities,companies,contacts,leads,tasks,activities,onCreate,onSave,notify,openLead,focusedOpportunity,setFocusedOpportunity,preferences=profileDefaults}:{opportunities:Opportunity[];companies:Company[];contacts:Contact[];leads:Lead[];tasks:TaskItem[];activities:ActivityEntry[];onCreate:(opportunity:Omit<Opportunity,'id'|'version'>)=>Promise<Opportunity|null>;onSave:(opportunity:Opportunity)=>Promise<boolean>;notify:(message:string)=>void;openLead:(name:string)=>void;focusedOpportunity:string|null;setFocusedOpportunity:(value:string|null)=>void;preferences?:ProfileUpdate['preferences']}){
   const {currentMember,defaultOwner:preferredOwner}=useWorkspaceMembers();const {statusLabel}=useCustomization();
   const defaultOwner=preferredOwner?.name||currentMember?.name||'';
-  const stages=['New','Contacted','Interested','Follow-up','Proposal','Negotiation','Won','Lost'];
+  const stages:string[]=[...leadStatuses];
   const probabilities:Record<string,number>={New:10,Contacted:25,Interested:40,'Follow-up':50,Proposal:60,Negotiation:80,Won:100,Lost:0};
   const [mode,setMode]=useState<'Board'|'Detailed'|'Table'>(preferences.pipelineView);
   const [owner,setOwner]=useState('All owners');

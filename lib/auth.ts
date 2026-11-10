@@ -4,7 +4,7 @@ import { canInviteMembers, permissionAllowed, resolveCapabilities } from '@/lib/
 import { env } from 'cloudflare:workers';
 import { recordAudit } from '@/lib/audit';
 import { DEFAULT_WORKSPACE_ID, ensureFoundationSchema } from '@/lib/foundation-store';
-import { cookieValue } from '@/lib/session-auth';
+import { cookieValue, LOCAL_SIGNED_OUT_COOKIE } from '@/lib/session-auth';
 import { workspaceDb } from '@/lib/workspace-store';
 import { sessionIdentity } from '@/lib/session-auth';
 import { loadAccess, transferOpenRecords } from '@/lib/team-store';
@@ -67,7 +67,7 @@ async function requestIdentity(request: Request, db: D1Database): Promise<Identi
     return { id, email: email.toLowerCase(), name, avatarUrl: request.headers.get('oai-authenticated-user-avatar-url') || undefined, localDevelopment: false };
   }
   const hostname = new URL(request.url).hostname;
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+  if ((hostname === 'localhost' || hostname === '127.0.0.1') && cookieValue(request, LOCAL_SIGNED_OUT_COOKIE) !== '1') {
     return { id: 'local:sauxxxxx', email: 'sauxxxxx@local.scout', name: 'sauxxxxx', localDevelopment: true };
   }
   return null;

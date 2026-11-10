@@ -36,7 +36,8 @@ async function finderPayload(db: D1Database, workspaceId: string, id: string, ow
   ]);
   const row = searchRow.results[0] as Record<string, unknown> | undefined;
   if (!row) return null;
-  const existing = await existingFinderLeads(db, workspaceId);
+  const running = ['Queued', 'Running'].includes(String(row.status));
+  const existing = running ? [] : await existingFinderLeads(db, workspaceId);
   const updatedLeads = await db.prepare(`SELECT l.* FROM leads l WHERE l.workspace_id=? AND l.id IN (SELECT imported_lead_id FROM finder_results WHERE search_id=? AND workspace_id=?)${ownOnly ? ' AND l.owner=?' : ''}`).bind(...(ownOnly ? [workspaceId, id, workspaceId, ownOnly] : [workspaceId, id, workspaceId])).all<Record<string,unknown>>();
   return { updatedLeads: updatedLeads.results.map(mapLead), search: mapFinderSearch(row), results: (resultRows.results as Record<string, unknown>[]).map(item => { const prospect = mapFinderResult(item); return { ...publicFinderResult(prospect), opportunity: salesOpportunity(prospect,mapFinderSearch(row).salesFocus), importedLeadId: prospect.importedLeadId || findDuplicate(prospect, existing)?.id, possibleDuplicates: possibleDuplicates(prospect, existing).map(lead => ({ id: lead.id, name: lead.name, city: lead.city, address: lead.address })) }; }) };
 }

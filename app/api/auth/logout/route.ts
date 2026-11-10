@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { ensureFoundationSchema } from '@/lib/foundation-store';
 import type { FinderEnv } from '@/lib/finder-runtime';
-import { destroySession } from '@/lib/session-auth';
+import { destroySession, isLocalRequest, LOCAL_SIGNED_OUT_COOKIE } from '@/lib/session-auth';
 import { workspaceDb } from '@/lib/workspace-store';
 
 export const dynamic = 'force-dynamic';
@@ -12,6 +12,7 @@ async function logout(request: Request) {
   await ensureFoundationSchema(db);
   const headers = new Headers({ location: '/' });
   headers.append('set-cookie', await destroySession(request, db));
+  if (isLocalRequest(request)) headers.append('set-cookie', `${LOCAL_SIGNED_OUT_COOKIE}=1; Path=/; HttpOnly; SameSite=Lax`);
   return new Response(null, { status: 303, headers });
 }
 

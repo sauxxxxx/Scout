@@ -9,6 +9,7 @@ import { recordAudit } from '@/lib/audit';
 import { notifyMember } from '@/lib/notifications';
 import { guardRecord } from '@/lib/record-scope';
 import { detailsChanged, handOverLead, leadDetails } from '@/lib/lead-touch-store';
+import { normalizeFacebookPageUrl } from '@/lib/finder-sales';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,12 +30,14 @@ export async function GET(request: Request) {
   const ownOnly = seesOnlyOwnRecords(session);
   const { where, values } = buildLeadFilter(params, workspaceId, session.user.name, ownOnly);
   const scope = buildLeadFilter(new URLSearchParams(), workspaceId, session.user.name, ownOnly);
+  // The totals and filter lists only need the company and contact tables when the filter searches their names.
+  const countFrom = /\b(?:companies|contacts)\./.test(where) ? leadJoins : 'FROM leads';
   const [rows, count, stats, industries, countries] = await db.batch([
     db.prepare(`SELECT ${leadColumns} ${leadJoins} WHERE ${where} ORDER BY ${leadOrder(params)} LIMIT ? OFFSET ?`).bind(...values, pageSize, offset),
-    db.prepare(`SELECT COUNT(*) total ${leadJoins} WHERE ${where}`).bind(...values),
-    db.prepare(`SELECT SUM(CASE WHEN leads.status NOT IN ('Won','Lost') THEN 1 ELSE 0 END) active,SUM(CASE WHEN leads.priority='High' THEN 1 ELSE 0 END) attention,SUM(CASE WHEN leads.status='Proposal' THEN 1 ELSE 0 END) proposals ${leadJoins} WHERE ${scope.where}`).bind(...scope.values),
-    db.prepare(`SELECT DISTINCT leads.industry industry ${leadJoins} WHERE ${scope.where} ORDER BY 1 LIMIT 300`).bind(...scope.values),
-    db.prepare(`SELECT DISTINCT leads.country country ${leadJoins} WHERE ${scope.where}`).bind(...scope.values),
+    db.prepare(`SELECT COUNT(*) total ${countFrom} WHERE ${where}`).bind(...values),
+    db.prepare(`SELECT SUM(CASE WHEN leads.status NOT IN ('Won','Lost') THEN 1 ELSE 0 END) active,SUM(CASE WHEN leads.priority='High' THEN 1 ELSE 0 END) attention,SUM(CASE WHEN leads.status='Proposal' THEN 1 ELSE 0 END) proposals FROM leads WHERE ${scope.where}`).bind(...scope.values),
+    db.prepare(`SELECT DISTINCT leads.industry industry FROM leads WHERE ${scope.where} ORDER BY 1 LIMIT 300`).bind(...scope.values),
+    db.prepare(`SELECT DISTINCT leads.country country FROM leads WHERE ${scope.where}`).bind(...scope.values),
   ]);
   const summary = stats.results[0] as { active: number | null; attention: number | null; proposals: number | null } | undefined;
   return Response.json({
@@ -81,12 +84,28 @@ export async function PATCH(request: Request) {
   const result = await auth.db.prepare(`UPDATE leads SET company_id=COALESCE(?,company_id),primary_contact_id=COALESCE(?,primary_contact_id),name=?,industry=?,city=?,status=?,score=?,owner=?,last=?,next=?,phone=?,email=?,contact=?,priority=?,opportunity=?,value=?,probability=?,close_date=?,archived=?,country=?,changed_at=CASE WHEN ?=1 THEN CURRENT_TIMESTAMP ELSE COALESCE(changed_at,updated_at) END,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND version=?`)
     .bind(lead.companyId??null,lead.primaryContactId??null,lead.name, lead.industry, lead.city, lead.status, lead.score, lead.owner, lead.last, lead.next, lead.phone, lead.email, lead.contact, lead.priority, lead.opportunity, lead.value ?? null, lead.probability ?? null, lead.closeDate ?? null, lead.archived ? 1 : 0, lead.country || DEFAULT_COUNTRY, changed ? 1 : 0, lead.id, auth.session.workspace.id, lead.version).run();
   if (!result.meta.changes) return Response.json({ error: 'This lead changed elsewhere. Refresh and try again.', conflict: true }, { status: 409 });
+  if (stored && before) await saveContactDetails(auth.db, auth.session.workspace.id, stored, before, lead);
   if (before && before.owner !== lead.owner) {
     await handOverLead(auth.db, auth.session.workspace.id, lead.id, before.owner, lead.owner);
     await notifyMember(auth, lead.owner, 'leadAssignments', 'Lead assigned to you', lead.name, `?page=leads`);
   }
   const row = await auth.db.prepare('SELECT * FROM leads WHERE id=? AND workspace_id=?').bind(lead.id, auth.session.workspace.id).first<Record<string, unknown>>();
   return Response.json({ lead: mapLead(row!) });
+}
+
+/** The screen shows the linked contact's and company's details first, so an edit has to land there too or it would not show. */
+async function saveContactDetails(db: D1Database, workspaceId: string, stored: Record<string, unknown>, before: ReturnType<typeof mapLead>, lead: { contact: string; phone: string; email: string; facebookUrl?: string }) {
+  const companyId = stored.company_id ? String(stored.company_id) : null;
+  const contactId = stored.primary_contact_id ? String(stored.primary_contact_id) : null;
+  const writes: D1PreparedStatement[] = [];
+  const reachChanged = before.phone !== lead.phone || before.email !== lead.email;
+  if (contactId && (reachChanged || before.contact !== lead.contact)) writes.push(db.prepare('UPDATE contacts SET name=?,phone=?,email=?,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?').bind(lead.contact || 'Primary contact', lead.phone, lead.email, contactId, workspaceId));
+  if (companyId && reachChanged) writes.push(db.prepare('UPDATE companies SET phone=?,email=?,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?').bind(lead.phone, lead.email, companyId, workspaceId));
+  if (companyId && lead.facebookUrl !== undefined) {
+    const facebook = lead.facebookUrl ? normalizeFacebookPageUrl(lead.facebookUrl) || lead.facebookUrl : '';
+    if (facebook !== (before.facebookUrl || '')) writes.push(db.prepare("UPDATE companies SET facebook_url=?,facebook_status=?,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?").bind(facebook || null, facebook ? 'confirmed' : 'not_found', companyId, workspaceId));
+  }
+  if (writes.length) await db.batch(writes);
 }
 
 export async function DELETE(request: Request) {

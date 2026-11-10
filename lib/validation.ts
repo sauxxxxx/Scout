@@ -7,7 +7,7 @@ import { facebookResearchSchema, normalizeFacebookPageUrl, salesFocuses } from '
 const optionalText = z.string().trim().max(500).optional().nullable();
 const recordId = z.string().uuid();
 
-export const leadStatuses = ['New', 'Contacted', 'Interested', 'Follow-up', 'Proposal', 'Negotiation', 'Won', 'Lost'] as const;
+export const leadStatuses = ['New', 'Prospect', 'Contacted', 'Interested', 'Follow-up', 'Proposal', 'Negotiation', 'Won', 'Lost'] as const;
 export const taskStatuses = ['Open', 'Backlog', 'Scheduled', 'In progress', 'Waiting', 'Completed'] as const;
 
 export const leadInputSchema = z.object({
@@ -25,6 +25,7 @@ export const leadInputSchema = z.object({
   next: z.string().trim().max(240),
   phone: z.string().trim().max(80),
   email: z.union([z.literal(''), z.email().max(254)]),
+  facebookUrl: z.string().trim().max(500).refine(value => !value || /^(?:https?:\/\/)?(?:[\w-]+\.)?(?:facebook|fb)\.com\//i.test(value), 'Use the business’s Facebook page link.').optional(),
   contact: z.string().trim().max(160),
   priority: z.enum(['Low', 'Medium', 'High']),
   opportunity: z.string().trim().max(240),
@@ -150,7 +151,7 @@ export const finderImportSchema = z.object({
   assigneeIds: z.array(z.string().trim().min(1).max(240)).max(100).optional(),
   manualAssignments: z.record(recordId, z.string().trim().min(1).max(240)).optional(),
   priority: z.enum(['Low', 'Medium', 'High']),
-  status: z.enum(['New', 'Contacted', 'Interested']),
+  status: z.enum(['New', 'Prospect', 'Contacted', 'Interested']),
   followUpDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   channel: z.enum(['Recommended', 'Facebook', 'Phone', 'Email', 'Research']).default('Recommended'),
   allowPossibleDuplicates: z.boolean().default(false),

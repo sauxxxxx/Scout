@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { FiArrowRight, FiChevronDown, FiChevronLeft, FiChevronRight, FiChevronUp, FiPlus, FiSearch, FiSliders } from 'react-icons/fi';
 import { localIso } from '@/lib/task-dates';
+import { leadStatuses } from '@/lib/validation';
 import { useWorkspaceMembers } from '@/components/WorkspaceMembers';
 import { type ProfileUpdate } from '@/lib/profile';
 import type { Page, Opportunity, ActivityEntry, TaskItem } from '@/lib/crm-types';
@@ -12,7 +13,7 @@ import { GettingStarted } from '@/components/GettingStarted';
 import { TrendBars } from '@/components/crm/TrendBars';
 import { conversionRate, describeChange, emptyResults, overviewPeriods, periodRange, trendBuckets, type OverviewPeriod, type OverviewSummary, type OverviewTeamRow } from '@/lib/overview-period';
 
-const stageNames = ['New', 'Contacted', 'Interested', 'Follow-up', 'Proposal', 'Negotiation', 'Won'];
+const stageNames: string[] = leadStatuses.filter(status => status !== 'Lost');
 
 function LayoutPicker() {
   const { view, updateView } = useViewSettings();
@@ -94,7 +95,7 @@ export function Overview({ setPage, onOpenReports, onCreateLead, onColdLeads, le
     pipeline: <React.Fragment key="pipeline">
       <section className={`bento-tile bento-wide${hasPipelineData ? '' : ' bento-empty'}`} aria-label="Your pipeline">
         <div className="bento-tile-head"><div><span className="bento-label">Your pipeline</span><strong className="bento-figure">{money(pipelineValue)}</strong><span className="bento-label">{open.length} open {open.length === 1 ? 'opportunity' : 'opportunities'}</span></div><div className="pipeline-mode-toggle" aria-label="Pipeline shows"><button className={metric === 'Leads' ? 'active' : ''} onClick={() => setMetric('Leads')}>Leads</button><button className={metric === 'Value' ? 'active' : ''} onClick={() => setMetric('Value')}>Value</button></div></div>
-        {hasPipelineData ? <div className="bento-stages">{stageData.map((item, index) => <button className={`bento-stage stage-${index}`} style={{ '--stage-width': `${Math.max(38, stageValue(item) / stageTop * 100)}%` } as React.CSSProperties} onClick={() => setPage('Pipeline')} aria-label={`${statusLabel(item.name)}: ${item.count} leads, ${money(item.value)}`} key={item.name}><span>{statusLabel(item.name)}</span><b>{metric === 'Leads' ? item.count : money(item.value)}</b></button>)}</div> : <EmptyState title="Your pipeline is empty" action={<button className="bento-pop-button" onClick={() => setPage('Finder')}><FiSearch /> Find businesses</button>}>Add a lead or find businesses to start building it.</EmptyState>}
+        {hasPipelineData ? <div className="bento-stages">{stageData.map(item => <button className={`bento-stage is-${item.name.toLowerCase().replace('-', '')}`} style={{ '--stage-width': `${Math.max(38, stageValue(item) / stageTop * 100)}%` } as React.CSSProperties} onClick={() => setPage('Pipeline')} aria-label={`${statusLabel(item.name)}: ${item.count} leads, ${money(item.value)}`} key={item.name}><span>{statusLabel(item.name)}</span><b>{metric === 'Leads' ? item.count : money(item.value)}</b></button>)}</div> : <EmptyState title="Your pipeline is empty" action={<button className="bento-pop-button" onClick={() => setPage('Finder')}><FiSearch /> Find businesses</button>}>Add a lead or find businesses to start building it.</EmptyState>}
       </section>
       <section className="bento-tile bento-narrow bento-next" aria-label="Next follow-up">
         {nextTask ? <><span className="bento-label">Next follow-up</span><h2>{nextTask.lead}</h2><p>{nextTask.title}</p><div className="bento-next-foot"><small>{nextTask.due === 'Today' ? `Today, ${nextTask.time}` : nextTask.due}{dueTasks.length > 1 ? ` · ${dueTasks.length - 1} more` : ''}</small><button className="bento-pop-button" onClick={() => openTask(nextTask.id)}>Open task <FiArrowRight /></button></div></>
