@@ -7,7 +7,7 @@ import { peopleLooks, type PersonLook } from '@/lib/person-tone';
 export type WorkspaceRole = 'owner' | 'admin' | 'member' | 'viewer';
 export type WorkspaceMember = {
   id: string; email: string; name: string; avatarUrl?: string; joinedAt?: string; role: WorkspaceRole; status: string; pending: boolean;
-  invitationId?: string; expiresAt?: string; lastSeenAt?: string; customRoleId?: string; customRoleName?: string;
+  invitationId?: string; expiresAt?: string; lastSeenAt?: string; customRoleId?: string; customRoleName?: string; inSales?: boolean;
   delivery?: 'sent' | 'manual' | 'failed'; lastSentAt?: string; note?: string; inviteUrl?: string;
 };
 type Session = { emailLogAddress?: string; user: { id: string; email: string; name: string; avatarUrl?: string }; role: WorkspaceRole; capabilities?: CapabilitySet; canInvite?: boolean };
@@ -44,9 +44,11 @@ export function WorkspaceMembersProvider({ session, children, preferredOwner = '
   const hasStartingMembers = !!initialMembers?.length;
   useEffect(() => { if (!hasStartingMembers) void refresh(); }, [refresh, hasStartingMembers]);
   const people = useMemo(() => peopleLooks(members), [members]);
-  const assignableMembers = useMemo(() => members.filter(member => !member.pending && member.status !== 'disabled' && member.role !== 'viewer'), [members]);
+  // People switched out of sales (IT, admins who don't sell) can't be given leads and don't appear in team results.
+  const assignableMembers = useMemo(() => members.filter(member => !member.pending && member.status !== 'disabled' && member.role !== 'viewer' && member.inSales !== false), [members]);
   const currentMember = members.find(member => member.id === session.user.id) || fallback;
-  const defaultOwner = ['owner', 'admin'].includes(session.role) ? assignableMembers.find(member => member.id === preferredOwner) || currentMember : currentMember;
+  const selfIfSelling = assignableMembers.find(member => member.id === currentMember.id);
+  const defaultOwner = ['owner', 'admin'].includes(session.role) ? assignableMembers.find(member => member.id === preferredOwner) || selfIfSelling || assignableMembers[0] || currentMember : currentMember;
   return <Context.Provider value={{ members, people, assignableMembers, currentMember, defaultOwner, emailLogAddress: session.emailLogAddress, currentRole: session.role, capabilities: session.capabilities || allCapabilities, canInvite: Boolean(session.canInvite), loading, refresh, replaceMembers: setMembers }}>{children}</Context.Provider>;
 }
 

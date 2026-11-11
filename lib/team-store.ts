@@ -47,17 +47,17 @@ export function transferOpenRecords(db: D1Database, workspaceId: string, from: s
   ];
 }
 
-type MemberRow = { id: string; email: string; name: string; avatar_url: string | null; joined_at: string | null; role: WorkspaceRole; status: string; last_seen_at: string | null; custom_role_id: string | null; custom_role_name: string | null; suspended: number };
+type MemberRow = { id: string; email: string; name: string; avatar_url: string | null; joined_at: string | null; role: WorkspaceRole; status: string; last_seen_at: string | null; custom_role_id: string | null; custom_role_name: string | null; suspended: number; in_sales: number | null };
 type InviteRow = { id: string; email: string; name: string; role: WorkspaceRole; expires_at: string; custom_role_id: string | null; custom_role_name: string | null; delivery: string; last_sent_at: string | null; note: string };
 
 export async function listMembers(db: D1Database, workspaceId: string, origin: string, includeLinks: boolean) {
   await db.prepare("UPDATE workspace_invitations SET status='expired',updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND status='pending' AND expires_at<CURRENT_TIMESTAMP").bind(workspaceId).run();
   const [active, pending] = await db.batch([
-    db.prepare(`SELECT u.id,u.email,u.name,u.avatar_url,u.status,u.last_seen_at,m.role,m.custom_role_id,m.suspended,m.created_at joined_at,r.name custom_role_name FROM workspace_memberships m JOIN users u ON u.id=m.user_id LEFT JOIN workspace_custom_roles r ON r.id=m.custom_role_id WHERE m.workspace_id=? ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 WHEN 'member' THEN 2 ELSE 3 END,u.name`).bind(workspaceId),
+    db.prepare(`SELECT u.id,u.email,u.name,u.avatar_url,u.status,u.last_seen_at,m.role,m.custom_role_id,m.suspended,m.in_sales,m.created_at joined_at,r.name custom_role_name FROM workspace_memberships m JOIN users u ON u.id=m.user_id LEFT JOIN workspace_custom_roles r ON r.id=m.custom_role_id WHERE m.workspace_id=? ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 WHEN 'member' THEN 2 ELSE 3 END,u.name`).bind(workspaceId),
     db.prepare(`SELECT i.id,i.email,i.name,i.role,i.expires_at,i.custom_role_id,i.delivery,i.last_sent_at,i.note,r.name custom_role_name FROM workspace_invitations i LEFT JOIN workspace_custom_roles r ON r.id=i.custom_role_id WHERE i.workspace_id=? AND i.status='pending' ORDER BY i.created_at DESC`).bind(workspaceId),
   ]);
   return [
-    ...(active.results as MemberRow[]).map(row => ({ id: row.id, email: row.email, name: row.name, avatarUrl: row.avatar_url || undefined, joinedAt: row.joined_at || undefined, role: row.role, status: row.suspended ? 'disabled' : row.status, pending: false, lastSeenAt: row.last_seen_at || undefined, customRoleId: row.custom_role_id || undefined, customRoleName: row.custom_role_name || undefined })),
+    ...(active.results as MemberRow[]).map(row => ({ id: row.id, email: row.email, name: row.name, avatarUrl: row.avatar_url || undefined, joinedAt: row.joined_at || undefined, role: row.role, status: row.suspended ? 'disabled' : row.status, pending: false, lastSeenAt: row.last_seen_at || undefined, inSales: row.in_sales !== 0, customRoleId: row.custom_role_id || undefined, customRoleName: row.custom_role_name || undefined })),
     ...(pending.results as InviteRow[]).map(row => ({ id: `invite:${row.id}`, invitationId: row.id, email: row.email, name: row.name, role: row.role, status: 'invited', pending: true, expiresAt: row.expires_at, customRoleId: row.custom_role_id || undefined, customRoleName: row.custom_role_name || undefined, delivery: row.delivery, lastSentAt: row.last_sent_at || undefined, note: row.note || undefined, inviteUrl: includeLinks ? inviteLink(origin, row.id) : undefined })),
   ];
 }

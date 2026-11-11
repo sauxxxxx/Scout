@@ -23,7 +23,7 @@ export function LeadImport({ onClose, onImported }: { onClose: () => void; onImp
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [mapping, setMapping] = useState<LeadImportMapping | null>(null);
   const [defaults, setDefaults] = useState({ industry: '', city: '' });
-  const [settings, setSettings] = useState({ ownerId: currentMember?.id || owners[0]?.id || '', status: 'New', priority: 'Medium', allowPhoneMatches: false });
+  const [settings, setSettings] = useState({ ownerId: owners.find(member => member.id === currentMember?.id)?.id || owners[0]?.id || '', status: 'New', priority: 'Medium', allowPhoneMatches: false });
   const [readError, setReadError] = useState('');
   const [dragging, setDragging] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);

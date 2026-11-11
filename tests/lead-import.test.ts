@@ -94,6 +94,13 @@ describe('saving an import batch', () => {
     expect((await send({ ownerId: 'u-ben', status: 'New', priority: 'Medium', rows: [row(2, 'Smile Dental')] })).status).toBe(403);
   });
 
+  it('refuses an owner who is switched out of sales', async () => {
+    store.sqlite.exec("UPDATE workspace_memberships SET in_sales=0 WHERE user_id='u-ana'");
+    const response = await send({ ownerId: 'u-ana', status: 'New', priority: 'Medium', rows: [row(2, 'Smile Dental')] });
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({ error: 'Choose an active sales member as the owner.' });
+  });
+
   it('refuses batches bigger than 25 rows', async () => {
     const rows = Array.from({ length: 26 }, (_, index) => row(index + 2, `Clinic ${index}`));
     expect((await send({ ownerId: 'u-ana', status: 'New', priority: 'Medium', rows })).status).toBe(422);

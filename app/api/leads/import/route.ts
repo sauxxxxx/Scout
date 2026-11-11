@@ -23,8 +23,8 @@ export async function POST(request: Request) {
   const input = parsed.data;
 
   if (!['owner', 'admin'].includes(session.role) && input.ownerId !== session.user.id) return Response.json({ error: 'You can only import leads for yourself.' }, { status: 403 });
-  const owner = await db.prepare("SELECT u.name FROM workspace_memberships m JOIN users u ON u.id=m.user_id WHERE m.workspace_id=? AND u.id=? AND u.status='active' AND m.role IN ('owner','admin','member')").bind(workspaceId, input.ownerId).first<{ name: string }>();
-  if (!owner) return Response.json({ error: 'Choose an active workspace member as the owner.' }, { status: 422 });
+  const owner = await db.prepare("SELECT u.name FROM workspace_memberships m JOIN users u ON u.id=m.user_id WHERE m.workspace_id=? AND u.id=? AND u.status='active' AND m.role IN ('owner','admin','member') AND m.in_sales=1").bind(workspaceId, input.ownerId).first<{ name: string }>();
+  if (!owner) return Response.json({ error: 'Choose an active sales member as the owner.' }, { status: 422 });
 
   const names = input.rows.map(row => nameKey(row.name));
   const marks = names.map(() => '?').join(',');

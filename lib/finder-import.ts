@@ -62,7 +62,7 @@ export async function importFinderResults(db: D1Database, workspaceId: string, a
   const requested = input.assignmentMode === 'single' ? [input.ownerId!] : input.assignmentMode === 'round_robin' ? input.assigneeIds! : Object.values(input.manualAssignments!);
   const assignees = [...new Set(requested)];
   if (!['owner', 'admin'].includes(actor.role) && assignees.some(id => id !== actor.id)) return { error: 'You can only assign prospects to yourself.', status: 403 };
-  const users = await db.prepare(`SELECT u.id,u.name FROM workspace_memberships m JOIN users u ON u.id=m.user_id WHERE m.workspace_id=? AND u.id IN (${assignees.map(() => '?').join(',')}) AND u.status='active' AND m.role IN ('owner','admin','member')`).bind(workspaceId, ...assignees).all<{ id: string; name: string }>();
+  const users = await db.prepare(`SELECT u.id,u.name FROM workspace_memberships m JOIN users u ON u.id=m.user_id WHERE m.workspace_id=? AND u.id IN (${assignees.map(() => '?').join(',')}) AND u.status='active' AND m.role IN ('owner','admin','member') AND m.in_sales=1`).bind(workspaceId, ...assignees).all<{ id: string; name: string }>();
   if (users.results.length !== assignees.length) return { error: 'Choose active workspace assignees.', status: 422 };
   const userById = new Map(users.results.map(user => [user.id, user.name]));
   const rows = await db.prepare(`SELECT * FROM finder_results WHERE workspace_id=? AND search_id=? AND id IN (${input.resultIds.map(() => '?').join(',')}) ORDER BY score DESC`).bind(workspaceId, search.id, ...input.resultIds).all<Record<string, unknown>>();

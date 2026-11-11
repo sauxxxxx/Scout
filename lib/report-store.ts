@@ -58,20 +58,28 @@ function tallyInto(results: { results: unknown[] }[], tally: Tally) {
 }
 
 /** One place to count, so Overview, Reports and their exports can never disagree. */
+/** Names of people switched out of sales (IT, admins who don't sell), so their test calls and leads don't show as sales work. */
+export async function nonSalesNames(db: D1Database, workspaceId: string) {
+  const rows = await db.prepare('SELECT u.name FROM workspace_memberships m JOIN users u ON u.id=m.user_id WHERE m.workspace_id=? AND m.in_sales=0').bind(workspaceId).all<{ name: string }>();
+  return new Set(rows.results.map(row => row.name));
+}
+
 export async function loadReport(db: D1Database, scope: ReportScope, range: { from: string; to: string; previousFrom: string; previousTo: string }): Promise<Report> {
+  const excluded = await nonSalesNames(db, scope.workspaceId);
   const results = await db.batch([...statements(db, scope, range.from, range.to), ...statements(db, scope, range.previousFrom, range.previousTo)]);
   const current = { ...emptyCounts };
   const previous = { ...emptyCounts };
   const reps = new Map<string, RepReport>();
   const days = new Map<string, DayReport>();
   tallyInto(results.slice(0, 5), (owner, day, counts) => {
+    if (excluded.has(owner)) return;
     addCounts(current, counts);
     if (!reps.has(owner)) reps.set(owner, { ...emptyCounts, name: owner });
     if (!days.has(day)) days.set(day, { ...emptyCounts, day });
     addCounts(reps.get(owner)!, counts);
     addCounts(days.get(day)!, counts);
   });
-  tallyInto(results.slice(5), (_owner, _day, counts) => addCounts(previous, counts));
+  tallyInto(results.slice(5), (owner, _day, counts) => { if (!excluded.has(owner)) addCounts(previous, counts); });
   return { current, previous, byRep: [...reps.values()], byDay: [...days.values()].sort((a, b) => a.day.localeCompare(b.day)) };
 }
 
@@ -83,7 +91,8 @@ export async function loadReportRecords(db: D1Database, scope: ReportScope, metr
   const source = sourceClause(scope.source);
   const owner = (column: string) => scope.owner ? ` AND ${column}=?` : '';
   const owners = scope.owner ? [scope.owner] : [];
-  const rows = async (sql: string, ...values: unknown[]) => (await db.prepare(`${sql} LIMIT ${RECORD_LIMIT}`).bind(...values).all<ReportRecord>()).results;
+  const excluded = await nonSalesNames(db, scope.workspaceId);
+  const rows = async (sql: string, ...values: unknown[]) => (await db.prepare(`${sql} LIMIT ${RECORD_LIMIT}`).bind(...values).all<ReportRecord>()).results.filter(record => !excluded.has(record.rep));
   if (metric === 'newLeads') return rows(`SELECT l.id key,date(l.prospect_at,?) date,l.owner rep,l.name lead,l.industry||' · '||l.city detail FROM leads l LEFT JOIN companies c INDEXED BY idx_companies_id ON c.id=l.company_id
     WHERE l.workspace_id=? AND l.archived=0 AND l.prospect_at IS NOT NULL AND date(l.prospect_at,?) BETWEEN ? AND ?${owner('l.owner')}${source} ORDER BY 2 DESC,l.name`, zone, scope.workspaceId, zone, from, to, ...owners);
   if (metric === 'followUps') return rows(`SELECT t.uid key,date(t.completed_at,?) date,t.owner rep,t.lead lead,t.title detail FROM tasks t LEFT JOIN companies c INDEXED BY idx_companies_id ON c.id=t.company_id

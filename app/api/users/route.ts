@@ -112,7 +112,7 @@ export async function PATCH(request: Request) {
   const auth = await authenticateRequest(request, 'users:manage');
   if (!auth.ok) return auth.response;
   const workspaceId = auth.session.workspace.id;
-  const body = await request.json() as { id?: string; role?: WorkspaceRole; customRoleId?: string | null; action?: string };
+  const body = await request.json() as { id?: string; role?: WorkspaceRole; customRoleId?: string | null; action?: string; inSales?: boolean };
   if (!body.id) return Response.json({ error: 'User ID is required.' }, { status: 400 });
 
   if (body.action === 'resend') {
@@ -124,6 +124,16 @@ export async function PATCH(request: Request) {
     await auth.db.prepare("UPDATE workspace_invitations SET delivery=?,expires_at=datetime('now',?),last_sent_at=CASE WHEN ?=? THEN CURRENT_TIMESTAMP ELSE last_sent_at END,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(delivery, `+${invite.expires_days} days`, delivery, 'sent', id).run();
     await recordAudit(auth, 'invite.resent', invite.email);
     return Response.json({ users: await members(request, auth), delivery });
+  }
+
+  if (body.action === 'sales') {
+    if (typeof body.inSales !== 'boolean') return Response.json({ error: 'Say whether this person counts as sales.' }, { status: 400 });
+    const person = await auth.db.prepare('SELECT m.role,u.name FROM workspace_memberships m JOIN users u ON u.id=m.user_id WHERE m.workspace_id=? AND m.user_id=?').bind(workspaceId, body.id).first<{ role: WorkspaceRole; name: string }>();
+    if (!person) return Response.json({ error: 'Workspace user not found.' }, { status: 404 });
+    if (person.role === 'owner' && auth.session.role !== 'owner' && body.id !== auth.session.user.id) return Response.json({ error: 'Only an owner can change this for an owner.' }, { status: 403 });
+    await auth.db.prepare('UPDATE workspace_memberships SET in_sales=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND user_id=?').bind(body.inSales ? 1 : 0, workspaceId, body.id).run();
+    await recordAudit(auth, body.inSales ? 'member.sales_on' : 'member.sales_off', person.name);
+    return Response.json({ users: await members(request, auth) });
   }
 
   if (body.action === 'suspend' || body.action === 'reactivate') {

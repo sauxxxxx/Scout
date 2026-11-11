@@ -234,6 +234,16 @@ export function TeamSettings({ session, notify }: Props) {
     notify(suspend ? `${member.name} suspended` : `${member.name} reactivated`);
   };
 
+  // Owners and admins decide who counts as sales, themselves included; only an owner changes it for another owner.
+  const canSetSales = (member: WorkspaceMember) => canManage && !member.pending && member.role !== 'viewer' && (session.role === 'owner' || member.role !== 'owner' || member.id === session.user.id);
+  const setInSales = async (member: WorkspaceMember, inSales: boolean) => {
+    const response = await fetch('/api/users', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: member.id, action: 'sales', inSales }) });
+    const data = await response.json() as { users?: WorkspaceMember[]; error?: string };
+    if (!response.ok) { notify(data.error || 'That could not be changed'); return; }
+    replaceMembers(data.users || []);
+    notify(inSales ? `${member.name} counts as sales again` : `${member.name} is left out of sales reports and assignment`);
+  };
+
   const resend = async (member: WorkspaceMember) => {
     const response = await fetch('/api/users', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: member.id, action: 'resend' }) });
     const data = await response.json() as { users?: WorkspaceMember[]; delivery?: 'sent' | 'manual' | 'failed'; error?: string };
@@ -276,11 +286,14 @@ export function TeamSettings({ session, notify }: Props) {
     </div>
 
     <section className={`team-list ${tab === 'Pending' ? 'is-pending' : ''}`}>
-      <div className="team-head">{tab === 'Active' ? <><span>Person</span><span>Role</span><span>Last active</span><span /></> : <><span>Person</span><span>Role</span><span>Status</span><span /></>}</div>
+      <div className="team-head">{tab === 'Active' ? <><span>Person</span><span>Role</span><span title="People who don't sell are left out of team results and can't be given leads">Sales</span><span>Last active</span><span /></> : <><span>Person</span><span>Role</span><span>Status</span><span /></>}</div>
       {loading && <p className="workflow-empty">Loading team…</p>}
       {!loading && visible.map(member => <div className="team-row" key={member.id}>
         <div className="team-user"><Avatar name={member.name} url={member.avatarUrl} className="team-avatar" /><div><strong>{tab === 'Pending' ? member.email : member.name}</strong><small>{tab === 'Pending' ? member.name : member.email}</small></div></div>
         <div>{editable(member) ? <ScoutSelect ariaLabel={`Role for ${member.name}`} value={memberRoleValue(member)} options={choices.map(choice => ({ value: choice.value, label: choice.label }))} onChange={value => chooseRole(member, value)} /> : <span className="role-label">{memberRoleLabel(member)}</span>}</div>
+        {tab === 'Active' && <div className="team-sales">{member.role === 'viewer' ? <span className="team-sales-label">Not in sales</span> : canSetSales(member)
+          ? <button type="button" role="switch" aria-checked={member.inSales !== false} aria-label={`${member.name} counts as sales`} className={`team-sales-switch${member.inSales !== false ? ' on' : ''}`} onClick={() => void setInSales(member, member.inSales === false)}><i aria-hidden="true" /><span>{member.inSales !== false ? 'Counts as sales' : 'Not in sales'}</span></button>
+          : <span className="team-sales-label">{member.inSales !== false ? 'Counts as sales' : 'Not in sales'}</span>}</div>}
         {tab === 'Active' ? <span>{member.id === session.user.id ? 'You' : member.status === 'disabled' ? 'Suspended' : lastActive(member.lastSeenAt)}</span> : <span>{member.delivery ? deliveryLabel[member.delivery] : ''}<small>{expiresIn(member.expiresAt)}</small></span>}
         <div className="team-row-actions">
           {tab === 'Pending' && canInvite && <>

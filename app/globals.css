@@ -2175,3 +2175,16 @@ button,input,select,textarea { font-family:inherit; }
 .lead-import-done ul { max-height:180px; overflow-y:auto; margin:8px 0 0; padding-left:18px; }
 .lead-import-done footer { display:flex; justify-content:center; margin-top:20px; }
 @media(max-width:600px){ .lead-import { padding:4px 16px 18px; } .lead-import-mapping { grid-template-columns:1fr; } }
+
+/* Team: who counts as sales */
+.team-list:not(.is-pending) .team-head,.team-list:not(.is-pending) .team-row { grid-template-columns:minmax(220px,1.6fr) minmax(150px,.8fr) minmax(150px,.75fr) minmax(110px,.6fr) minmax(60px,.4fr); }
+.team-sales-switch { display:inline-flex; align-items:center; gap:8px; padding:0; border:0; background:none; color:var(--muted); font:inherit; font-size:var(--text-sm); cursor:pointer; }
+.team-sales-switch i { position:relative; width:34px; height:20px; flex:none; border-radius:var(--radius-pill); background:var(--line-strong); transition:background var(--motion-fast); }
+.team-sales-switch i::after { content:''; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:var(--canvas); box-shadow:var(--shadow-sm); transition:transform var(--motion-fast) var(--ease-scout); }
+.team-sales-switch.on { color:var(--ink); }
+.team-sales-switch.on i { background:var(--positive); }
+.team-sales-switch.on i::after { transform:translateX(14px); }
+.team-sales-switch:focus-visible { outline:none; border-radius:var(--radius-pill); box-shadow:var(--focus-ring); }
+.team-sales-label { color:var(--muted); font-size:var(--text-sm); }
+@media(max-width:900px){ .team-list:not(.is-pending) .team-head,.team-list:not(.is-pending) .team-row { grid-template-columns:minmax(0,1.4fr) 150px 150px; } .team-list:not(.is-pending) .team-row>span,.team-list:not(.is-pending) .team-head>span:nth-child(4) { display:none; } }
+@media(max-width:700px){ .team-list:not(.is-pending) .team-row { grid-template-columns:1fr; } }
