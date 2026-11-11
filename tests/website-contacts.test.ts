@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contactPageUrls, decodeCloudflareEmail, extractContacts } from '@/lib/website-contacts';
+import { businessTokens, contactPageUrls, contactsForBusiness, decodeCloudflareEmail, extractContacts, isOwnSite } from '@/lib/website-contacts';
 
 const site = 'https://www.smiledental.ph/';
 
@@ -57,5 +57,36 @@ describe('choosing which pages to read', () => {
   it('uses the sitemap when the homepage links no contact page', () => {
     const sitemap = '<urlset><url><loc>https://www.smiledental.ph/our-branches</loc></url><url><loc>https://www.smiledental.ph/blog/teeth</loc></url></urlset>';
     expect(contactPageUrls('<a href="/services">Services</a>', sitemap, root)[0]).toBe('https://www.smiledental.ph/our-branches');
+  });
+});
+
+describe('telling a business’s own site from a listing page', () => {
+  it('picks the words that identify a business', () => {
+    expect(businessTokens('AMG Dental Clinic Cebu')).toEqual(['amg', 'adcc']);
+    expect(businessTokens('Smile Dental Cebu')).toEqual(['smile', 'sdc']);
+    expect(businessTokens('RnB Dental Clinic')).toEqual(['rnb', 'rdc']);
+  });
+
+  it('trusts a site whose address names the business, or a homepage Google pointed to', () => {
+    expect(isOwnSite('https://www.smiledental.ph/contact', 'Smile Dental Cebu')).toBe(true);
+    expect(isOwnSite('https://amgdental.com/', 'AMG Dental Clinic Cebu')).toBe(true);
+    expect(isOwnSite('https://drcruzclinic.com/', 'Bright Teeth Center')).toBe(true);
+  });
+
+  it('treats a deep page on someone else’s site as a listing page', () => {
+    expect(isOwnSite('https://cebudentalimplants.com/content/amg-dental-clinic-cebu-ma-christina-building-cebu-city', 'AMG Dental Clinic Cebu')).toBe(false);
+  });
+
+  it('keeps only details that name the business when the page is a listing', () => {
+    const page = '<p>esldentalclinic@gmail.com · amgdental.cebu@gmail.com</p><a href="tel:+63 32 111 2222">Call</a><a href="https://www.facebook.com/amgdentalclinic01">AMG</a><a href="https://www.facebook.com/esldentalclinic">ESL</a><a href="https://m.me/esldentalclinic">Chat</a><a href="https://wa.me/639171112222">WhatsApp</a>';
+    const listing = 'https://cebudentalimplants.com/content/amg-dental-clinic-cebu';
+    const result = contactsForBusiness(extractContacts([page], listing), listing, 'AMG Dental Clinic Cebu');
+    expect(result).toMatchObject({ ownSite: false, email: 'amgdental.cebu@gmail.com', emails: ['amgdental.cebu@gmail.com'], phone: '', socialUrl: 'https://www.facebook.com/amgdentalclinic01', channels: {} });
+  });
+
+  it('leaves everything on the business’s own site', () => {
+    const page = '<p>hello@gmail.com</p><a href="tel:+63 32 111 2222">Call</a>';
+    const result = contactsForBusiness(extractContacts([page], 'https://www.smiledental.ph/'), 'https://www.smiledental.ph/', 'Smile Dental Cebu');
+    expect(result).toMatchObject({ ownSite: true, email: 'hello@gmail.com', phone: '+63 32 111 2222' });
   });
 });

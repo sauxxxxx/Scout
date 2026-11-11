@@ -2095,6 +2095,8 @@ button,input,select,textarea { font-family:inherit; }
 .finder-row-facts em.research { background:var(--warning-soft); color:var(--warning); }
 .finder-row-facts em.existing { background:var(--info-soft); color:var(--info); }
 .finder-row-facts em.closed { background:var(--negative-soft); color:var(--negative); }
+.finder-source { display:block; margin-top:3px; color:var(--muted); font-size:var(--text-xs); }
+.finder-source.warn { color:var(--warning); }
 .finder-channel-links { display:flex; flex-wrap:wrap; gap:6px 12px; }
 .finder-channel-links a { display:inline-flex; align-items:center; gap:4px; }
 .finder-review-next { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin-top:16px; padding-top:14px; border-top:1px solid var(--line); color:var(--muted); font-size:var(--text-sm); }

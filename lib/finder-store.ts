@@ -4,7 +4,7 @@ import { calibrateAssessment, createGeminiProvider, finderAiInputHash, geminiCos
 
 import { areaFromBounds, distanceKm, isWithinArea, parseFinderArea, parseFinderBounds, placesSearchArea, type FinderArea, type FinderBounds } from '@/lib/finder-map';
 import { validGooglePlaceType } from '@/lib/finder-industries';
-import { contactPageUrls, extractContacts, type ContactChannels } from '@/lib/website-contacts';
+import { contactPageUrls, contactsForBusiness, extractContacts, type ContactChannels } from '@/lib/website-contacts';
 import { matchesContactRequirements, normalizeFacebookPageUrl, readFacebookResearch, salesOpportunity, type FacebookResearch, type RequirementMode, type SalesFocus } from '@/lib/finder-sales';
 
 export type FinderStatus = 'Saved' | 'Queued' | 'Running' | 'Complete' | 'Partial' | 'Failed' | 'Cancelled';
@@ -222,10 +222,10 @@ function publicWebsite(url: string) {
 
 const facebookUrl = normalizeFacebookPageUrl;
 
-type WebsiteEvidence = { email: string; socialUrl: string; summary: string; phone?: string; channels?: ContactChannels };
+type WebsiteEvidence = { email: string; socialUrl: string; summary: string; phone?: string; channels?: ContactChannels; ownSite?: boolean };
 const emptyEvidence = (): WebsiteEvidence => ({ email: '', socialUrl: '', summary: '' });
 
-async function websiteEvidence(website: string): Promise<WebsiteEvidence> {
+async function websiteEvidence(website: string, businessName: string): Promise<WebsiteEvidence> {
   if (!website || !publicWebsite(website)) return emptyEvidence();
   try {
     let root = new URL(website);
@@ -254,13 +254,13 @@ async function websiteEvidence(website: string): Promise<WebsiteEvidence> {
     const linksContactPage = /<a\b[^>]*href=["'][^"']*(?:contact|about|location|branch)[^"']*["']/i.test(homepage);
     const sitemap = linksContactPage ? '' : await fetchPage(new URL('/sitemap.xml', root).href, 'xml');
     const extraPages = await Promise.all(contactPageUrls(homepage, sitemap, root).map(url => fetchPage(url)));
-    const contacts = extractContacts([homepage, ...extraPages], root.href);
+    const contacts = contactsForBusiness(extractContacts([homepage, ...extraPages], root.href), website, businessName);
     const html = [homepage, ...extraPages].filter(Boolean).join('\n');
     const title = homepage.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || '';
     const description = homepage.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)/i)?.[1] || homepage.match(/<meta[^>]+content=["']([^"']*)["'][^>]+name=["']description["']/i)?.[1] || '';
     const visible = html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&(?:nbsp|amp|quot|#39);/gi, ' ').replace(/\s+/g, ' ').trim();
     const summary = [title, description, visible].filter(Boolean).join(' · ').slice(0, 2400);
-    return { email: contacts.email, socialUrl: contacts.socialUrl, summary, phone: contacts.phone, channels: contacts.channels };
+    return { email: contacts.email, socialUrl: contacts.socialUrl, summary, phone: contacts.phone, channels: contacts.channels, ownSite: contacts.ownSite };
   } catch {
     return { email: '', socialUrl: '', summary: '' };
   }
@@ -470,7 +470,7 @@ export async function processFinderJob(db: D1Database, workspaceId: string, sear
       const enriched = await Promise.all(newPlaces.map(async place => {
         const directFacebook = facebookUrl(place.websiteUri || '');
         const evidence = directFacebook ? { email: '', socialUrl: directFacebook, summary: '' }
-          : shouldInspectWebsites || Boolean(place.websiteUri) ? await websiteEvidence(place.websiteUri || '') : { email: '', socialUrl: '', summary: '' };
+          : shouldInspectWebsites || Boolean(place.websiteUri) ? await websiteEvidence(place.websiteUri || '', place.displayName?.text || '') : { email: '', socialUrl: '', summary: '' };
         return { place, evidence, directFacebook };
       }));
       const fetchedAt = new Date().toISOString();
@@ -482,13 +482,15 @@ export async function processFinderJob(db: D1Database, workspaceId: string, sear
         const phone = googlePhone || evidence.phone || '';
         const channels = evidence.channels || {};
         const assessment = assessPlace(place, evidence, job.salesFocus);
+        // Details read from a directory or listing page say so, so reps can tell them from the business's own site.
+        const siteSource = evidence.ownSite === false ? 'Listing page, not their own site' : 'Company website';
         const provenance: FinderResultRecord['provenance'] = [
           { field: 'business', provider: 'Google Places', sourceUrl, retrievedAt: fetchedAt },
-          ...(phone ? [{ field: 'phone', provider: googlePhone ? 'Google Places' : 'Company website', sourceUrl: googlePhone ? sourceUrl : website, retrievedAt: fetchedAt }] : []),
-          ...(Object.keys(channels).length ? [{ field: 'messaging', provider: 'Company website', sourceUrl: website, retrievedAt: fetchedAt }] : []),
-          ...(website ? [{ field: 'website', provider: 'Google Places', sourceUrl, retrievedAt: fetchedAt }] : []),
-          ...(evidence.email ? [{ field: 'email', provider: 'Company website', sourceUrl: website, retrievedAt: fetchedAt }] : []),
-          ...(evidence.socialUrl ? [{ field: 'facebook', provider: directFacebook ? 'Google Places' : 'Company website', sourceUrl: evidence.socialUrl, retrievedAt: fetchedAt }] : []),
+          ...(phone ? [{ field: 'phone', provider: googlePhone ? 'Google Places' : siteSource, sourceUrl: googlePhone ? sourceUrl : website, retrievedAt: fetchedAt }] : []),
+          ...(Object.keys(channels).length ? [{ field: 'messaging', provider: siteSource, sourceUrl: website, retrievedAt: fetchedAt }] : []),
+          ...(website ? [{ field: 'website', provider: evidence.ownSite === false ? 'Google Places (a listing page, not their own site)' : 'Google Places', sourceUrl, retrievedAt: fetchedAt }] : []),
+          ...(evidence.email ? [{ field: 'email', provider: siteSource, sourceUrl: website, retrievedAt: fetchedAt }] : []),
+          ...(evidence.socialUrl ? [{ field: 'facebook', provider: directFacebook ? 'Google Places' : siteSource, sourceUrl: evidence.socialUrl, retrievedAt: fetchedAt }] : []),
         ];
         const latitude = place.location?.latitude;
         const longitude = place.location?.longitude;

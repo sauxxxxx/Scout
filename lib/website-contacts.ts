@@ -119,6 +119,49 @@ export function extractContacts(pages: string[], websiteUrl: string): WebsiteCon
   return { email: emails[0] || '', emails, phone, socialUrl, channels };
 }
 
+// Words most business names share, so they can't tell one business from another.
+const genericWords = new Set(['the', 'and', 'of', 'for', 'inc', 'corp', 'corporation', 'company', 'ltd', 'llc', 'opc', 'ph', 'philippines', 'branch', 'main',
+  'dental', 'dentist', 'dentists', 'dentistry', 'clinic', 'clinics', 'medical', 'center', 'centre', 'care', 'health', 'salon', 'spa', 'beauty', 'studio', 'shop', 'store',
+  'restaurant', 'cafe', 'coffee', 'hotel', 'resort', 'gym', 'fitness', 'services', 'service', 'group', 'family', 'house', 'home', 'center', 'international', 'enterprises',
+  'trading', 'law', 'office', 'auto', 'repair', 'city', 'cebu', 'manila', 'davao', 'makati', 'quezon', 'mandaue', 'taguig', 'pasig', 'lapu']);
+const compact = (value: string) => value.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+/** The parts of a business name that identify it: "AMG Dental Clinic Cebu" gives "amg", "Smile Dental Cebu" gives "smile" and "sdc". */
+export function businessTokens(name: string) {
+  const words = name.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const distinctive = words.filter(word => word.length >= 3 && !genericWords.has(word));
+  const initials = words.length >= 3 ? words.map(word => word[0]).join('') : '';
+  return [...new Set([...distinctive, ...(initials.length >= 3 ? [initials] : [])])];
+}
+
+export const mentionsBusiness = (text: string, tokens: string[]) => { const value = compact(text); return tokens.some(token => value.includes(token)); };
+
+/**
+ * Google sometimes lists a directory or listing page as a business's website. Those pages carry other businesses' emails and numbers,
+ * so a site counts as the business's own only when its address names the business, or Google pointed at a site's homepage.
+ */
+export function isOwnSite(websiteUrl: string, businessName: string) {
+  try {
+    const url = new URL(websiteUrl);
+    const label = url.hostname.replace(/^www\./i, '').replace(/\.(?:com|net|org|biz|info|co|ph|com\.ph|net\.ph|org\.ph|edu\.ph|gov\.ph|asia|site|online|store|shop|clinic|dental)$/i, '').replace(/\.(?:com|net|org|co)$/i, '');
+    const tokens = businessTokens(businessName);
+    if (tokens.length && mentionsBusiness(label, tokens)) return true;
+    return /^\/(?:(?:index|home|default)\.\w+|home|en|ph)?\/?$/i.test(url.pathname);
+  } catch { return true; }
+}
+
+/** On a page that isn't the business's own, keep only details that name the business; numbers can't be checked, so they're dropped. */
+export function contactsForBusiness(contacts: WebsiteContacts, websiteUrl: string, businessName: string): WebsiteContacts & { ownSite: boolean } {
+  if (isOwnSite(websiteUrl, businessName)) return { ...contacts, ownSite: true };
+  const tokens = businessTokens(businessName);
+  const named = (value?: string) => (value && tokens.length && mentionsBusiness(value.replace(/^https?:\/\/[^/]+/i, ''), tokens) ? value : undefined);
+  const emails = contacts.emails.filter(email => tokens.length && mentionsBusiness(email, tokens));
+  const channels: ContactChannels = {};
+  if (named(contacts.channels.messenger)) channels.messenger = contacts.channels.messenger;
+  if (named(contacts.channels.instagram)) channels.instagram = contacts.channels.instagram;
+  return { email: emails[0] || '', emails, phone: '', socialUrl: named(contacts.socialUrl) || '', channels, ownSite: false };
+}
+
 /** Same-site pages likely to list contact details: linked from the homepage, or named in the sitemap. */
 export function contactPageUrls(homepage: string, sitemap: string, root: URL, limit = 3) {
   const fromLinks = [...homepage.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)]
