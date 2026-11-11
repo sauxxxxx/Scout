@@ -32,6 +32,15 @@ describe('reading a spreadsheet', () => {
     expect(mapping).toMatchObject({ name: 0, industry: 1, city: 2, phone: 3, email: 4, facebookUrl: 5, contact: 6, country: -1 });
   });
 
+  it('maps a second email without treating it as the primary email', () => {
+    const table = parseCsv('Business,Second email\nAna Salon,bookings@salon.ph');
+    const mapping = guessMapping(table[0]);
+    expect(mapping).toMatchObject({ email: -1, secondaryEmail: 1 });
+    expect(planLeadImport(table, mapping, { industry: '', city: '' }).rows).toMatchObject([
+      { email: '', secondaryEmail: 'bookings@salon.ph' },
+    ]);
+  });
+
   it('leaves out rows without a name or repeated in the file, and blanks bad emails and links', () => {
     const table = parseCsv('Business,City,Email,Facebook\nAna Salon,,ana@salon.ph,facebook.com/anasalon\n,Cebu,,\nana  salon,Cebu,,\nBen Spa,Davao,not-an-email,https://example.com');
     const plan = planLeadImport(table, guessMapping(table[0]), { industry: 'Salons', city: 'Davao City' });
@@ -61,11 +70,11 @@ describe('saving an import batch', () => {
   });
 
   it('adds new leads with a company and contact, and skips ones already in Scout', async () => {
-    const response = await send({ ownerId: 'u-ana', status: 'New', priority: 'Medium', rows: [row(2, 'Smile Dental', { phone: '0912', email: 'hi@smile.ph', facebookUrl: 'https://facebook.com/smiledental', contact: 'Dr. Cruz' }), row(3, 'old clinic')] });
+    const response = await send({ ownerId: 'u-ana', status: 'New', priority: 'Medium', rows: [row(2, 'Smile Dental', { phone: '0912', email: 'hi@smile.ph', secondaryEmail: 'appointments@smile.ph', facebookUrl: 'https://facebook.com/smiledental', contact: 'Dr. Cruz' }), row(3, 'old clinic')] });
     expect(response.status).toBe(200);
     const data = await response.json() as { imported: { name: string; phone: string; email: string; contact: string; facebookUrl?: string; status: string; owner: string }[]; skipped: string[] };
     expect(data.skipped).toEqual(['old clinic']);
-    expect(data.imported).toMatchObject([{ name: 'Smile Dental', phone: '0912', email: 'hi@smile.ph', contact: 'Dr. Cruz', facebookUrl: 'https://www.facebook.com/smiledental', status: 'New', owner: 'Ana' }]);
+    expect(data.imported).toMatchObject([{ name: 'Smile Dental', phone: '0912', email: 'hi@smile.ph', secondaryEmail: 'appointments@smile.ph', contact: 'Dr. Cruz', facebookUrl: 'https://www.facebook.com/smiledental', status: 'New', owner: 'Ana' }]);
     expect(store.sqlite.prepare("SELECT prospect_at FROM leads WHERE name='Smile Dental'").get()).toEqual({ prospect_at: null });
     expect(store.sqlite.prepare("SELECT COUNT(*) total FROM activities WHERE type='Lead import'").get()).toEqual({ total: 1 });
   });

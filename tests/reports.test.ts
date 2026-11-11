@@ -107,9 +107,9 @@ describe('report rows', () => {
 
   it('builds an export by rep with a total', () => {
     const table = reportTable(report, 'rep', '2026-11-02', '2026-11-08');
-    expect(table.headers).toEqual(['Rep', 'Prospects', 'Calls', 'Emails', 'Meetings', 'Follow-ups', 'Proposals', 'Deals won', 'Revenue']);
-    expect(table.rows[0]).toEqual(['Ben Cruz', 0, 3, 0, 0, 0, 0, 0, 900]);
-    expect(table.rows.at(-1)).toEqual(['Total', 0, 5, 0, 0, 0, 0, 0, 900]);
+    expect(table.headers).toEqual(['Rep', 'Prospects', 'Total Calls', 'Live Calls', 'No Answer', 'Emails', 'Meetings', 'Follow-ups', 'Proposals', 'Deals won', 'Revenue']);
+    expect(table.rows[0]).toEqual(['Ben Cruz', 0, 3, 0, 0, 0, 0, 0, 0, 0, 900]);
+    expect(table.rows.at(-1)).toEqual(['Total', 0, 5, 0, 0, 0, 0, 0, 0, 0, 900]);
   });
 
   it('leaves quiet days out of an export over time', () => {

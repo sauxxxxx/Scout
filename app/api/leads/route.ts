@@ -57,14 +57,15 @@ export async function POST(request: Request) {
   const lead = parsed.data;
   const id = lead.id || crypto.randomUUID();
   try {
-    await auth.db.prepare(`INSERT INTO leads (country,id,workspace_id,company_id,primary_contact_id,version,name,industry,city,status,score,owner,last,next,phone,email,contact,priority,opportunity,value,probability,close_date,archived,created_at,updated_at,changed_at)
-      VALUES (?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`)
-      .bind(lead.country || DEFAULT_COUNTRY, id, auth.session.workspace.id, lead.companyId??null,lead.primaryContactId??null,lead.name, lead.industry, lead.city, lead.status, lead.score, lead.owner, lead.last, lead.next, lead.phone, lead.email, lead.contact, lead.priority, lead.opportunity, lead.value ?? null, lead.probability ?? null, lead.closeDate ?? null, lead.archived ? 1 : 0).run();
+    await auth.db.prepare(`INSERT INTO leads (country,id,workspace_id,company_id,primary_contact_id,version,name,industry,city,status,score,owner,last,next,phone,email,secondary_email,business_link,contact,priority,opportunity,value,probability,close_date,archived,created_at,updated_at,changed_at)
+      VALUES (?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`)
+      .bind(lead.country || DEFAULT_COUNTRY, id, auth.session.workspace.id, lead.companyId??null,lead.primaryContactId??null,lead.name, lead.industry, lead.city, lead.status, lead.score, lead.owner, lead.last, lead.next, lead.phone, lead.email, lead.secondaryEmail ?? '', lead.businessLink ?? null, lead.contact, lead.priority, lead.opportunity, lead.value ?? null, lead.probability ?? null, lead.closeDate ?? null, lead.archived ? 1 : 0).run();
   } catch {
     return Response.json({ error: 'A lead with this name or ID already exists.' }, { status: 409 });
   }
   await notifyMember(auth, lead.owner, 'leadAssignments', 'Lead assigned to you', lead.name, `?page=leads`);
-  await syncLeadCoreCrm(auth.db,auth.session.workspace.id,id);const row = await auth.db.prepare('SELECT * FROM leads WHERE id=? AND workspace_id=?').bind(id, auth.session.workspace.id).first<Record<string, unknown>>();
+  await syncLeadCoreCrm(auth.db,auth.session.workspace.id,id);
+  const row = await auth.db.prepare(`SELECT ${leadColumns} ${leadJoins} WHERE leads.id=? AND leads.workspace_id=?`).bind(id, auth.session.workspace.id).first<Record<string, unknown>>();
   return Response.json({ lead: mapLead(row!) }, { status: 201 });
 }
 
@@ -80,16 +81,18 @@ export async function PATCH(request: Request) {
   // Compared with what the screen shows, because the name, city and contact can come from the linked company.
   const stored = await auth.db.prepare(`SELECT ${leadColumns} ${leadJoins} WHERE leads.id=? AND leads.workspace_id=?`).bind(lead.id, auth.session.workspace.id).first<Record<string, unknown>>();
   const before = stored ? mapLead(stored) : null;
-  const changed = detailsChanged(before ? { ...before, archived: !!before.archived } : null, { ...lead, country: lead.country || DEFAULT_COUNTRY, archived: !!lead.archived }, leadDetails);
-  const result = await auth.db.prepare(`UPDATE leads SET company_id=COALESCE(?,company_id),primary_contact_id=COALESCE(?,primary_contact_id),name=?,industry=?,city=?,status=?,score=?,owner=?,last=?,next=?,phone=?,email=?,contact=?,priority=?,opportunity=?,value=?,probability=?,close_date=?,archived=?,country=?,changed_at=CASE WHEN ?=1 THEN CURRENT_TIMESTAMP ELSE COALESCE(changed_at,updated_at) END,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND version=?`)
-    .bind(lead.companyId??null,lead.primaryContactId??null,lead.name, lead.industry, lead.city, lead.status, lead.score, lead.owner, lead.last, lead.next, lead.phone, lead.email, lead.contact, lead.priority, lead.opportunity, lead.value ?? null, lead.probability ?? null, lead.closeDate ?? null, lead.archived ? 1 : 0, lead.country || DEFAULT_COUNTRY, changed ? 1 : 0, lead.id, auth.session.workspace.id, lead.version).run();
+  const secondaryEmail = lead.secondaryEmail ?? before?.secondaryEmail ?? '';
+  const previousLink = before?.businessLink ?? before?.facebookUrl ?? '';
+  const changed = detailsChanged(before ? { ...before, businessLink: previousLink, archived: !!before.archived } : null, { ...lead, secondaryEmail, businessLink: lead.businessLink ?? previousLink, country: lead.country || DEFAULT_COUNTRY, archived: !!lead.archived }, leadDetails);
+  const result = await auth.db.prepare(`UPDATE leads SET company_id=COALESCE(?,company_id),primary_contact_id=COALESCE(?,primary_contact_id),name=?,industry=?,city=?,status=?,score=?,owner=?,last=?,next=?,phone=?,email=?,secondary_email=COALESCE(?,secondary_email),business_link=COALESCE(?,business_link),contact=?,priority=?,opportunity=?,value=?,probability=?,close_date=?,archived=?,country=?,changed_at=CASE WHEN ?=1 THEN CURRENT_TIMESTAMP ELSE COALESCE(changed_at,updated_at) END,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND version=?`)
+    .bind(lead.companyId??null,lead.primaryContactId??null,lead.name, lead.industry, lead.city, lead.status, lead.score, lead.owner, lead.last, lead.next, lead.phone, lead.email, lead.secondaryEmail ?? null, lead.businessLink ?? null, lead.contact, lead.priority, lead.opportunity, lead.value ?? null, lead.probability ?? null, lead.closeDate ?? null, lead.archived ? 1 : 0, lead.country || DEFAULT_COUNTRY, changed ? 1 : 0, lead.id, auth.session.workspace.id, lead.version).run();
   if (!result.meta.changes) return Response.json({ error: 'This lead changed elsewhere. Refresh and try again.', conflict: true }, { status: 409 });
   if (stored && before) await saveContactDetails(auth.db, auth.session.workspace.id, stored, before, lead);
   if (before && before.owner !== lead.owner) {
     await handOverLead(auth.db, auth.session.workspace.id, lead.id, before.owner, lead.owner);
     await notifyMember(auth, lead.owner, 'leadAssignments', 'Lead assigned to you', lead.name, `?page=leads`);
   }
-  const row = await auth.db.prepare('SELECT * FROM leads WHERE id=? AND workspace_id=?').bind(lead.id, auth.session.workspace.id).first<Record<string, unknown>>();
+  const row = await auth.db.prepare(`SELECT ${leadColumns} ${leadJoins} WHERE leads.id=? AND leads.workspace_id=?`).bind(lead.id, auth.session.workspace.id).first<Record<string, unknown>>();
   return Response.json({ lead: mapLead(row!) });
 }
 
@@ -101,7 +104,7 @@ async function saveContactDetails(db: D1Database, workspaceId: string, stored: R
   const reachChanged = before.phone !== lead.phone || before.email !== lead.email;
   if (contactId && (reachChanged || before.contact !== lead.contact)) writes.push(db.prepare('UPDATE contacts SET name=?,phone=?,email=?,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?').bind(lead.contact || 'Primary contact', lead.phone, lead.email, contactId, workspaceId));
   if (companyId && reachChanged) writes.push(db.prepare('UPDATE companies SET phone=?,email=?,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?').bind(lead.phone, lead.email, companyId, workspaceId));
-  if (companyId && lead.facebookUrl !== undefined) {
+  if (companyId && lead.facebookUrl !== undefined && lead.facebookUrl !== (before.facebookUrl || '')) {
     const facebook = lead.facebookUrl ? normalizeFacebookPageUrl(lead.facebookUrl) || lead.facebookUrl : '';
     if (facebook !== (before.facebookUrl || '')) writes.push(db.prepare("UPDATE companies SET facebook_url=?,facebook_status=?,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?").bind(facebook || null, facebook ? 'confirmed' : 'not_found', companyId, workspaceId));
   }

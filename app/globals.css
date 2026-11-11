@@ -1107,6 +1107,7 @@ input[aria-invalid="true"],textarea[aria-invalid="true"] { border-color:var(--ne
 .quick-actions a,.quick-actions button { display:inline-flex; flex:1 1 auto; align-items:center; justify-content:center; gap:6px; min-height:36px; padding:0 10px; border:1px solid var(--line); border-radius:var(--radius-sm); background:none; color:var(--ink-2); font-size:var(--text-sm); font-weight:500; text-decoration:none; white-space:nowrap; }
 .quick-actions a:hover,.quick-actions button:hover { border-color:var(--line); background:var(--surface); }
 .quick-actions a svg,.quick-actions button svg { font-size:var(--text-md); }
+.deal-section>header { margin-bottom:12px; }
 .deal-section>div { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
 .deal-section p { margin:0; font-size:var(--text-md); }
 .deal-section p span { display:block; margin-bottom:3px; color:var(--muted); font-size:var(--text-sm); }
@@ -1245,10 +1246,12 @@ button.metric-link small { text-decoration:underline; text-underline-offset:3px;
 .won-trend-bars i { display:block; width:100%; max-width:36px; margin:0 auto; border-radius:4px 4px 0 0; background:var(--accent); }
 .won-trend-axis { display:flex; justify-content:space-between; margin-top:6px; color:var(--muted); font-size:var(--text-xs); }
 .team-results { padding:6px 0 22px; }
-.team-results-head,.team-results-table>div:not(.team-results-head) { display:grid; grid-template-columns:minmax(150px,1.6fr) repeat(5,minmax(calc(60px*var(--font-scale)),.6fr)) minmax(100px,.9fr); align-items:center; gap:8px; padding:0 10px; }
+.team-results-head,.team-results-table>div:not(.team-results-head) { display:grid; grid-template-columns:minmax(150px,1.6fr) repeat(7,minmax(calc(66px*var(--font-scale)),.6fr)) minmax(100px,.9fr); align-items:center; gap:8px; padding:0 10px; }
 .team-results-head { min-height:34px; border-bottom:1px solid var(--line); color:var(--muted); font-size:var(--text-xs); }
 .team-results-table>div:not(.team-results-head) { min-height:44px; font-size:var(--text-sm); }
 .team-results-table>div:not(.team-results-head):nth-child(odd) { background:var(--surface); }
+.team-results-table { overflow-x:auto; }
+.team-results-head,.team-results-table>div:not(.team-results-head) { min-width:calc(800px*var(--font-scale)); }
 .team-results-table strong { font-weight:600; }
 @media(max-width:700px){
   .overview-filters .pipeline-mode-toggle { width:100%; overflow-x:auto; }
@@ -1259,8 +1262,6 @@ button.metric-link small { text-decoration:underline; text-underline-offset:3px;
   .period-stepper button { width:44px; height:44px; }
   .overview-filter-selects { width:100%; margin-left:0; }
   .overview-filter-selects>* { flex:1; }
-  .team-results-table { overflow-x:auto; }
-  .team-results-head,.team-results-table>div:not(.team-results-head) { min-width:calc(620px*var(--font-scale)); }
   .won-trend-bars button { min-height:0!important; }
 }
 
@@ -1442,12 +1443,12 @@ html[data-density=Compact] .pipeline-column-scroll article { padding-top:8px; pa
 /* Overview work counts */
 .overview-hero-facts { display:flex; flex-wrap:wrap; gap:4px 16px; margin:12px 0 0; color:var(--ink-2); font-size:var(--text-sm); }
 .overview-hero-facts strong { color:var(--ink); font-weight:600; }
-.overview-work { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; margin-top:14px; }
+.overview-work { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-top:14px; }
 .overview-work>div { padding:11px 13px; border:1px solid var(--line); border-radius:var(--radius-md); }
 .overview-work span { display:block; color:var(--muted); font-size:var(--text-xs); }
 .overview-work strong { display:block; margin-top:4px; font-size:var(--text-xl); font-weight:600; font-variant-numeric:tabular-nums; }
 .overview-report-link { display:inline-flex; align-items:center; gap:4px; margin:10px 0 2px; }
-@media(max-width:800px){ .overview-work { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media(max-width:800px){ .overview-work { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 
 /* Reports */
 .report-tiles { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }

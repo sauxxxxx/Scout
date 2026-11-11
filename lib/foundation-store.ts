@@ -6,7 +6,7 @@ import { FINDER_DEFAULT_LEADS } from '@/lib/finder-cells';
 export const DEFAULT_WORKSPACE_ID = 'scout-default';
 
 /** Bump when anything in migrateFoundationSchema changes. Requests then skip the whole setup unless this moved. */
-export const SCHEMA_VERSION = 28;
+export const SCHEMA_VERSION = 30;
 
 const createUsersTable = `CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
@@ -283,6 +283,8 @@ async function migrateFoundationSchema(db: D1Database) {
   });
 
   await addColumns(db, 'leads', {
+    secondary_email: "TEXT NOT NULL DEFAULT ''",
+    business_link: 'TEXT',
     id: 'TEXT', workspace_id: 'TEXT', company_id: 'TEXT', primary_contact_id: 'TEXT', version: 'INTEGER NOT NULL DEFAULT 1', created_at: 'TEXT',
     finder_provider: 'TEXT', finder_record_id: 'TEXT', business_address: "TEXT NOT NULL DEFAULT ''", country: "TEXT NOT NULL DEFAULT 'PH'", last_touch_at: 'TEXT', changed_at: 'TEXT', prospect_at: 'TEXT',
   });

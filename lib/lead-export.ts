@@ -1,8 +1,8 @@
 import { countryName } from '@/lib/countries';
 
-type ExportLead = { name: string; industry: string; city: string; country?: string; status: string; score: number; owner: string; contact: string; phone: string; email: string; priority: string; next: string; lastTouchAt?: string };
+type ExportLead = { name: string; industry: string; city: string; country?: string; status: string; score: number; owner: string; contact: string; phone: string; email: string; secondaryEmail?: string; priority: string; next: string; lastTouchAt?: string };
 
-const columns: [string, keyof ExportLead][] = [['Business', 'name'], ['Industry', 'industry'], ['City', 'city'], ['Country', 'country'], ['Status', 'status'], ['Score', 'score'], ['Owner', 'owner'], ['Contact', 'contact'], ['Phone', 'phone'], ['Email', 'email'], ['Priority', 'priority'], ['Last touch', 'lastTouchAt'], ['Next action', 'next']];
+const columns: [string, keyof ExportLead][] = [['Business', 'name'], ['Industry', 'industry'], ['City', 'city'], ['Country', 'country'], ['Status', 'status'], ['Score', 'score'], ['Owner', 'owner'], ['Contact', 'contact'], ['Phone', 'phone'], ['Email', 'email'], ['Priority', 'priority'], ['Last touch', 'lastTouchAt'], ['Next action', 'next'], ['Second email', 'secondaryEmail']];
 
 const readable = (lead: ExportLead, key: keyof ExportLead) => {
   if (key === 'score') return lead.score || '';

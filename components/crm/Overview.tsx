@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { FiArrowRight, FiChevronDown, FiChevronLeft, FiChevronRight, FiChevronUp, FiPlus, FiSearch, FiSliders } from 'react-icons/fi';
+import { callMetrics } from '@/lib/reports';
 import { localIso } from '@/lib/task-dates';
 import { leadStatuses } from '@/lib/validation';
 import { useWorkspaceMembers } from '@/components/WorkspaceMembers';
@@ -27,8 +28,8 @@ function LayoutPicker() {
 function TeamTable({ rows, money }: { rows: OverviewTeamRow[]; money: (value: number) => string }) {
   return <section className="team-results"><h2>Team results</h2>
     <div className="team-results-table" role="table" aria-label="Team results">
-      <div className="team-results-head" role="row">{['Rep', 'Calls', 'Emails', 'Meetings', 'New leads', 'Won', 'Revenue'].map(label => <span role="columnheader" key={label}>{label}</span>)}</div>
-      {rows.map(row => <div role="row" key={row.name}><strong role="cell" className="team-rep"><Avatar name={row.name} />{row.name}</strong><span role="cell">{row.calls}</span><span role="cell">{row.emails}</span><span role="cell">{row.meetings}</span><span role="cell">{row.newLeads}</span><span role="cell">{row.wonCount}</span><span role="cell">{money(row.wonValue)}</span></div>)}
+      <div className="team-results-head" role="row">{['Rep', ...callMetrics.map(metric => metric.label), 'Emails', 'Meetings', 'New leads', 'Won', 'Revenue'].map(label => <span role="columnheader" key={label}>{label}</span>)}</div>
+      {rows.map(row => <div role="row" key={row.name}><strong role="cell" className="team-rep"><Avatar name={row.name} />{row.name}</strong>{callMetrics.map(metric => <span role="cell" key={metric.key}>{row[metric.key]}</span>)}<span role="cell">{row.emails}</span><span role="cell">{row.meetings}</span><span role="cell">{row.newLeads}</span><span role="cell">{row.wonCount}</span><span role="cell">{money(row.wonValue)}</span></div>)}
     </div>
   </section>;
 }
@@ -89,7 +90,7 @@ export function Overview({ setPage, onOpenReports, onCreateLead, onColdLeads, le
   const stageTop = Math.max(...stageData.map(stageValue), 1);
   const dueTasks = [...tasks.filter(task => task.status !== 'Completed' && taskOwner(task) && ((task.dueAt && task.dueAt < today) || task.due === 'Overdue')), ...todayTasks];
   const nextTask = dueTasks[0];
-  const work = [['Prospects', now?.newLeads], ['Calls', now?.calls], ['Emails', now?.emails], ['Meetings', now?.meetings], ['Follow-ups', now?.followUps], ['Proposals', now?.proposals]] as const;
+  const work = [['Prospects', now?.newLeads], ...callMetrics.map(metric => [metric.label, now?.[metric.key]] as const), ['Emails', now?.emails], ['Meetings', now?.meetings], ['Follow-ups', now?.followUps], ['Proposals', now?.proposals]] as const;
 
   const sections: Record<OverviewSection, React.ReactNode> = {
     pipeline: <React.Fragment key="pipeline">

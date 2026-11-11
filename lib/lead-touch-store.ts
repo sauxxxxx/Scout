@@ -1,7 +1,7 @@
 import { touchActivityTypes, touchTypesSql } from '@/lib/last-touch';
 
 /** The details a person can see. Links Scout fills in behind the scenes are left out, so tidying a record never counts as updating it. */
-export const leadDetails = ['name', 'industry', 'city', 'country', 'status', 'score', 'owner', 'next', 'phone', 'email', 'contact', 'priority', 'opportunity', 'value', 'probability', 'closeDate', 'archived'];
+export const leadDetails = ['name', 'industry', 'city', 'country', 'status', 'score', 'owner', 'next', 'phone', 'email', 'secondaryEmail', 'businessLink', 'contact', 'priority', 'opportunity', 'value', 'probability', 'closeDate', 'archived'];
 export const activityDetails = ['type', 'detail', 'status', 'occurred_at', 'outcome', 'duration', 'subject', 'value', 'document_link', 'attachment_key', 'owner', 'deleted_at'];
 export const taskDetails = ['title', 'owner', 'priority', 'due_at', 'type', 'notes', 'status', 'reminder', 'recurrence', 'outcome'];
 // Stage and probability are left out: a real deal move also changes the lead, and on load Scout lines them up with the lead by itself.

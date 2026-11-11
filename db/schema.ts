@@ -45,6 +45,8 @@ CREATE TABLE IF NOT EXISTS leads (
   next TEXT NOT NULL,
   phone TEXT NOT NULL,
   email TEXT NOT NULL,
+  secondary_email TEXT NOT NULL DEFAULT '',
+  business_link TEXT,
   contact TEXT NOT NULL,
   priority TEXT NOT NULL,
   opportunity TEXT NOT NULL,

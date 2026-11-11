@@ -1,4 +1,5 @@
 import { FINDER_MAX_LEADS } from '@/lib/finder-cells';
+import { normalizeBusinessLink } from '@/lib/business-link';
 import { isCountry } from '@/lib/countries';
 import { z } from 'zod';
 import { finderAreaSchema, finderBoundsSchema } from '@/lib/finder-map';
@@ -25,6 +26,13 @@ export const leadInputSchema = z.object({
   next: z.string().trim().max(240),
   phone: z.string().trim().max(80),
   email: z.union([z.literal(''), z.email().max(254)]),
+  secondaryEmail: z.string().trim().pipe(z.union([z.literal(''), z.email().max(254)])).optional(),
+  businessLink: z.string().transform((value, context) => {
+    const link = normalizeBusinessLink(value);
+    if (link !== null) return link;
+    context.addIssue({ code: 'custom', message: 'Enter a valid website or social link.' });
+    return z.NEVER;
+  }).optional(),
   facebookUrl: z.string().trim().max(500).refine(value => !value || /^(?:https?:\/\/)?(?:[\w-]+\.)?(?:facebook|fb)\.com\//i.test(value), 'Use the business’s Facebook page link.').optional(),
   contact: z.string().trim().max(160),
   priority: z.enum(['Low', 'Medium', 'High']),
@@ -200,7 +208,7 @@ export const finderManualProspectSchema = z.object({
   locationConfirmed: z.literal(true, { error: 'Check that this business is in your selected search area.' }),
 }).strict();
 
-const fieldLabels: Record<string, string> = { name: 'Name', industry: 'Industry', city: 'City', email: 'Email', phone: 'Phone', owner: 'Owner', title: 'Title', value: 'Value', probability: 'Probability', lead: 'Lead', companyId: 'Company', stage: 'Stage' };
+const fieldLabels: Record<string, string> = { name: 'Name', industry: 'Industry', city: 'City', email: 'Email', secondaryEmail: 'Second email', businessLink: 'Website or social link', phone: 'Phone', owner: 'Owner', title: 'Title', value: 'Value', probability: 'Probability', lead: 'Lead', companyId: 'Company', stage: 'Stage' };
 
 export function validationError(error: z.ZodError) {
   const fields = z.flattenError(error).fieldErrors as Record<string, string[] | undefined>;

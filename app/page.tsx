@@ -145,7 +145,32 @@ export default function Home() {
   const saveContact=async(contact:Contact)=>{const response=await fetch('/api/contacts',{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify(contact)});const data=await response.json() as {contact?:Contact;error?:string};if(!response.ok){notify(data.error||'Contact could not be saved');return}const saved=data.contact!;pullChanges.current();setContacts(value=>value.map(item=>item.id===saved.id?saved:saved.isPrimary&&item.companyId===saved.companyId?{...item,isPrimary:false}:item));if(saved.isPrimary)setLeads(value=>value.map(lead=>lead.companyId===saved.companyId?{...lead,primaryContactId:saved.id,contact:saved.name,email:saved.email,phone:saved.phone}:lead));notify('Contact saved')};
   const deleteContact=async(contact:Contact)=>{const response=await fetch(`/api/contacts?id=${encodeURIComponent(contact.id)}`,{method:'DELETE'});const data=await response.json() as {error?:string};if(!response.ok){notify(data.error||'Contact could not be removed');return}setContacts(value=>value.filter(item=>item.id!==contact.id));pullChanges.current();notify('Contact removed')};
   const createOpportunity=async(opportunity:Omit<Opportunity,'id'|'version'>):Promise<Opportunity|null>=>{const response=await fetch('/api/opportunities',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(opportunity)});const data=await response.json() as {opportunity?:Opportunity;error?:string};if(!response.ok){notify(data.error||'Opportunity could not be created');return null}const saved=data.opportunity!;pullChanges.current();setOpportunities(value=>[saved,...value]);if(saved.leadId)setLeads(value=>value.map(lead=>lead.id===saved.leadId?{...lead,status:saved.stage,value:saved.value,probability:saved.probability,closeDate:saved.closeDate}:lead));return saved};
-  const saveOpportunity=async(opportunity:Opportunity):Promise<boolean>=>{const previous=opportunities.find(item=>item.id===opportunity.id);const previousLead=leads.find(lead=>lead.id===opportunity.leadId);setOpportunities(value=>value.map(item=>item.id===opportunity.id?opportunity:item));if(opportunity.leadId)setLeads(value=>value.map(lead=>lead.id===opportunity.leadId?{...lead,status:opportunity.stage,value:opportunity.value,probability:opportunity.probability,closeDate:opportunity.closeDate}:lead));const response=await fetch('/api/opportunities',{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify(opportunity)});const data=await response.json() as {opportunity?:Opportunity;error?:string};if(!response.ok){if(previous)setOpportunities(value=>value.map(item=>item.id===previous.id?previous:item));if(previousLead)setLeads(value=>value.map(lead=>lead.id===previousLead.id?previousLead:lead));notify(data.error||'Opportunity could not be saved');return false}const saved=data.opportunity!;setOpportunities(value=>value.map(item=>item.id===saved.id?saved:item));return true};
+  const saveOpportunity = async (opportunity: Opportunity): Promise<boolean> => {
+    try {
+      const response = await fetch('/api/opportunities', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(opportunity),
+      });
+      const data = await response.json() as { opportunity?: Opportunity; error?: string };
+      if (!response.ok || !data.opportunity) {
+        notify(data.error || 'Opportunity could not be saved');
+        if (response.status === 409) pullChanges.current();
+        return false;
+      }
+      const saved = { ...data.opportunity, fromFinder: opportunity.fromFinder };
+      setOpportunities(value => value.map(item => item.id === saved.id ? saved : item));
+      if (saved.leadId) {
+        setLeads(value => value.map(lead => lead.id === saved.leadId
+          ? { ...lead, status: saved.stage, value: saved.value, probability: saved.probability, closeDate: saved.closeDate }
+          : lead));
+      }
+      return true;
+    } catch {
+      notify('Opportunity could not be saved. Check your connection and try again.');
+      return false;
+    }
+  };
   const acceptImportedLeads=(imported:Lead[])=>{if(imported.length&&imported.every(lead=>lead.id&&leadBaseline.current.get(lead.id)?.version===lead.version))return;imported.forEach(lead=>{if(lead.id)leadBaseline.current.set(lead.id,lead)});setLeads(value=>[...imported,...value.filter(lead=>!imported.some(item=>item.id===lead.id))]);Promise.all([fetch('/api/workspace'),fetch('/api/activities?all=1')]).then(async([workspaceResponse,activityResponse])=>{if(!workspaceResponse.ok||!activityResponse.ok)throw new Error();const data=await workspaceResponse.json() as {leads:Lead[];tasks:TaskItem[];companies:Company[];contacts:Contact[];opportunities:Opportunity[]};const activityData=await activityResponse.json() as {activities:ActivityEntry[]};leadBaseline.current=new Map(data.leads.filter(item=>item.id).map(item=>[item.id!,item]));const labelled=data.tasks.map(item=>relabelTask(item));taskBaseline.current=new Map(labelled.filter(item=>item.uid).map(item=>[item.uid!,item]));activityBaseline.current=new Map(activityData.activities.filter(item=>item.uid).map(item=>[item.uid!,item]));setLeads(data.leads);setTasks(labelled);setCompanies(data.companies);setContacts(data.contacts);setOpportunities(data.opportunities);setActivities(activityData.activities)}).catch(()=>notify('Prospects saved. Refresh to load their latest CRM details.'))};
   const ensureLead=async(name:string)=>{if(leads.some(lead=>lead.name===name))return;await crmData.loadLeads({name,pageSize:'5'})};
   const openLead=async(name:string)=>{await ensureLead(name);setFocusedLead(name);setLeadView('Leads');setPage('Leads')};

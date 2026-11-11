@@ -4,6 +4,7 @@ import { countryName, countryOptions, DEFAULT_COUNTRY, isCountry } from '@/lib/c
 /** The most rows one file may bring in. Each batch of 25 is one request, so this is at most 80 requests. */
 export const LEAD_IMPORT_MAX_ROWS = 2000;
 export const LEAD_IMPORT_STATUSES = ['New', 'Prospect', 'Contacted', 'Interested'] as const;
+const secondaryEmailAliases = ['second email', 'secondary email', 'alternate email', 'email 2', 'email2'] as const;
 
 export const leadImportFields = [
   { key: 'name', label: 'Business name', required: true, aliases: ['business name', 'business', 'company name', 'company', 'name', 'lead name', 'lead', 'account', 'store', 'shop', 'clinic', 'establishment'] },
@@ -13,12 +14,13 @@ export const leadImportFields = [
   { key: 'contact', label: 'Contact person', aliases: ['contact person', 'contact name', 'contact', 'person', 'owner name', 'full name'] },
   { key: 'phone', label: 'Phone', aliases: ['phone', 'phone number', 'mobile', 'mobile number', 'contact number', 'cellphone', 'cell', 'telephone', 'tel', 'number'] },
   { key: 'email', label: 'Email', aliases: ['email', 'e mail', 'email address', 'mail'] },
+  { key: 'secondaryEmail', label: 'Second email', aliases: secondaryEmailAliases },
   { key: 'facebookUrl', label: 'Facebook page', aliases: ['facebook', 'facebook page', 'facebook url', 'facebook link', 'fb', 'fb page', 'fb link'] },
 ] as const;
 
 export type LeadImportField = (typeof leadImportFields)[number]['key'];
 export type LeadImportMapping = Record<LeadImportField, number>;
-export type LeadImportRow = { line: number; name: string; industry: string; city: string; country: string; contact: string; phone: string; email: string; facebookUrl: string };
+export type LeadImportRow = { line: number; name: string; industry: string; city: string; country: string; contact: string; phone: string; email: string; secondaryEmail?: string; facebookUrl: string };
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const facebookPattern = /^(?:https?:\/\/)?(?:[\w-]+\.)?(?:facebook|fb)\.com\/./i;
@@ -58,7 +60,10 @@ export function guessMapping(headers: string[]): LeadImportMapping {
   const mapping = {} as LeadImportMapping;
   for (const field of leadImportFields) {
     const exact = field.aliases.map(alias => keys.findIndex((key, index) => !used.has(index) && key === alias)).find(index => index >= 0);
-    const partial = exact ?? field.aliases.map(alias => keys.findIndex((key, index) => !used.has(index) && alias.length > 3 && key.includes(alias))).find(index => index >= 0);
+    const partial = exact ?? field.aliases.map(alias => keys.findIndex((key, index) => {
+      if (used.has(index) || alias.length <= 3 || !key.includes(alias)) return false;
+      return field.key !== 'email' || !secondaryEmailAliases.some(name => key.includes(name));
+    })).find(index => index >= 0);
     const column = partial ?? -1;
     mapping[field.key] = column;
     if (column >= 0) used.add(column);
@@ -93,11 +98,14 @@ export function planLeadImport(table: string[][], mapping: LeadImportMapping, de
     seen.add(nameKey(name));
     let email = cell(cells, 'email').slice(0, 254);
     if (email && !emailPattern.test(email)) { badEmail.push(line); email = ''; }
+    let secondaryEmail = cell(cells, 'secondaryEmail').slice(0, 254);
+    if (secondaryEmail && !emailPattern.test(secondaryEmail)) { if (!badEmail.includes(line)) badEmail.push(line); secondaryEmail = ''; }
     let facebookUrl = cell(cells, 'facebookUrl').slice(0, 500);
     if (facebookUrl && !facebookPattern.test(facebookUrl)) { badFacebook.push(line); facebookUrl = ''; }
     if (facebookUrl && !/^https?:\/\//i.test(facebookUrl)) facebookUrl = `https://${facebookUrl}`;
     rows.push({
       line, name, email, facebookUrl,
+      ...(secondaryEmail ? { secondaryEmail } : {}),
       industry: (cell(cells, 'industry') || defaults.industry.trim() || 'Not set').slice(0, 120),
       city: (cell(cells, 'city') || defaults.city.trim() || 'Not set').slice(0, 120),
       country: countryCode(cell(cells, 'country')) || DEFAULT_COUNTRY,
@@ -113,7 +121,7 @@ export function planLeadImport(table: string[][], mapping: LeadImportMapping, de
   return { rows: rows.slice(0, LEAD_IMPORT_MAX_ROWS), missingName, repeated, fixes };
 }
 
-export const leadImportTemplate = 'Business name,Industry,City,Country,Contact person,Phone,Email,Facebook page\r\nSmile Dental Clinic,Dental clinics,Cebu City,Philippines,Ana Santos,+63 912 345 6789,hello@smiledental.ph,https://facebook.com/smiledentalcebu\r\n';
+export const leadImportTemplate = 'Business name,Industry,City,Country,Contact person,Phone,Email,Second email,Facebook page\r\nSmile Dental Clinic,Dental clinics,Cebu City,Philippines,Ana Santos,+63 912 345 6789,hello@smiledental.ph,appointments@smiledental.ph,https://facebook.com/smiledentalcebu\r\n';
 
 const facebookUrl = z.string().trim().max(500).refine(value => !value || facebookPattern.test(value), 'Use a Facebook page link.');
 export const leadImportSchema = z.object({
@@ -130,6 +138,7 @@ export const leadImportSchema = z.object({
     contact: z.string().trim().max(160),
     phone: z.string().trim().max(80),
     email: z.union([z.literal(''), z.email().max(254)]),
+    secondaryEmail: z.union([z.literal(''), z.email().max(254)]).optional(),
     facebookUrl,
   }).strict()).min(1).max(25),
 }).strict();

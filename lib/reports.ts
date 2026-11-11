@@ -1,15 +1,21 @@
 /** What Overview and Reports count. Everything here runs in the browser and on the server, so both always agree. */
-export type ReportCounts = { newLeads: number; calls: number; emails: number; meetings: number; notes: number; followUps: number; proposals: number; wonCount: number; wonValue: number; lostCount: number };
+export type ReportCounts = { newLeads: number; calls: number; liveCalls: number; noAnswerCalls: number; emails: number; meetings: number; notes: number; followUps: number; proposals: number; wonCount: number; wonValue: number; lostCount: number };
 export type RepReport = ReportCounts & { name: string };
 export type DayReport = ReportCounts & { day: string };
 export type Report = { current: ReportCounts; previous: ReportCounts; byRep: RepReport[]; byDay: DayReport[] };
 export type ReportRecord = { key: string; date: string; rep: string; lead: string; detail: string };
 
-export const emptyCounts: ReportCounts = { newLeads: 0, calls: 0, emails: 0, meetings: 0, notes: 0, followUps: 0, proposals: 0, wonCount: 0, wonValue: 0, lostCount: 0 };
+export const emptyCounts: ReportCounts = { newLeads: 0, calls: 0, liveCalls: 0, noAnswerCalls: 0, emails: 0, meetings: 0, notes: 0, followUps: 0, proposals: 0, wonCount: 0, wonValue: 0, lostCount: 0 };
+
+export const callMetrics = [
+  { key: 'calls', label: 'Total Calls', singular: 'call attempt', plural: 'call attempts' },
+  { key: 'liveCalls', label: 'Live Calls', singular: 'live call', plural: 'live calls' },
+  { key: 'noAnswerCalls', label: 'No Answer', singular: 'unanswered call', plural: 'unanswered calls' },
+] as const;
 
 export const reportMetrics = [
   { key: 'newLeads', label: 'Prospects', singular: 'prospect', plural: 'prospects' },
-  { key: 'calls', label: 'Calls', singular: 'call', plural: 'calls' },
+  ...callMetrics,
   { key: 'emails', label: 'Emails', singular: 'email', plural: 'emails' },
   { key: 'meetings', label: 'Meetings', singular: 'meeting', plural: 'meetings' },
   { key: 'followUps', label: 'Follow-ups', singular: 'follow-up', plural: 'follow-ups' },

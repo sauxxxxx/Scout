@@ -20,6 +20,16 @@ const followUpTasks = "t.status='Completed' AND LOWER(t.type)!='internal reminde
 const proposalActivity = "(LOWER(a.type) IN ('proposal','send proposal') OR (a.type='Status change' AND a.detail LIKE '% → Proposal%'))";
 const completedActivity = "a.deleted_at IS NULL AND COALESCE(a.status,'Completed')='Completed'";
 
+// Older Lead logs start with the outcome. Older Task logs put it after the task title.
+const firstDetail = (value: string) => `LOWER(TRIM(substr(${value},1,instr(${value}||' · ',' · ')-1)))`;
+const firstPart = firstDetail('a.detail');
+const secondPart = firstDetail("substr(a.detail,instr(a.detail,' · ')+3)");
+const callOutcome = `COALESCE(NULLIF(LOWER(TRIM(a.outcome)),''), CASE
+  WHEN ${firstPart} IN ('connected','no answer','voicemail','cannot be reached','rescheduled','not interested','completed') THEN ${firstPart}
+  WHEN instr(a.detail,' · ')>0 THEN ${secondPart} END)`;
+const liveCall = `${callOutcome} IN ('connected','not interested')`;
+const noAnswerCall = `${callOutcome}='no answer'`;
+
 function statements(db: D1Database, scope: ReportScope, from: string, to: string) {
   const zone = zoneModifier(scope.timezone);
   const source = sourceClause(scope.source);
@@ -32,7 +42,10 @@ function statements(db: D1Database, scope: ReportScope, from: string, to: string
     db.prepare(`SELECT l.owner owner,date(l.prospect_at,?) day,COUNT(*) total FROM leads l LEFT JOIN companies c INDEXED BY idx_companies_id ON c.id=l.company_id
       WHERE l.workspace_id=? AND l.archived=0 AND l.prospect_at IS NOT NULL AND date(l.prospect_at,?) BETWEEN ? AND ?${owner('l.owner')}${source} GROUP BY 1,2`)
       .bind(zone, scope.workspaceId, zone, from, to, ...owners),
-    db.prepare(`SELECT a.owner owner,substr(a.occurred_at,1,10) day,LOWER(a.type) type,COUNT(*) total FROM activities a LEFT JOIN companies c INDEXED BY idx_companies_id ON c.id=a.company_id
+    db.prepare(`SELECT a.owner owner,substr(a.occurred_at,1,10) day,LOWER(a.type) type,COUNT(*) total,
+      CASE WHEN LOWER(a.type) IN ('call','callback') THEN SUM(${liveCall}) END live_calls,
+      CASE WHEN LOWER(a.type) IN ('call','callback') THEN SUM(${noAnswerCall}) END no_answer_calls
+      FROM activities a LEFT JOIN companies c INDEXED BY idx_companies_id ON c.id=a.company_id
       WHERE a.workspace_id=? AND ${completedActivity} AND a.occurred_at BETWEEN ? AND ?||'~'${owner('a.owner')}${source} GROUP BY 1,2,3`)
       .bind(scope.workspaceId, from, to, ...owners),
     db.prepare(`SELECT t.owner owner,date(t.completed_at,?) day,COUNT(*) total FROM tasks t LEFT JOIN companies c INDEXED BY idx_companies_id ON c.id=t.company_id
@@ -52,7 +65,16 @@ function tallyInto(results: { results: unknown[] }[], tally: Tally) {
   const [deals, leads, work, followUps, proposals] = results.map(result => result.results) as Record<string, unknown>[][];
   for (const row of deals) tally(String(row.owner), String(row.day), { wonCount: number(row.won_count), wonValue: number(row.won_value), lostCount: number(row.lost_count) });
   for (const row of leads) tally(String(row.owner), String(row.day), { newLeads: number(row.total) });
-  for (const row of work) { const field = activityField(String(row.type)); if (field) tally(String(row.owner), String(row.day), { [field]: number(row.total) }); }
+  for (const row of work) {
+    const field = activityField(String(row.type));
+    if (!field) continue;
+    const counts: Partial<ReportCounts> = { [field]: number(row.total) };
+    if (field === 'calls') {
+      counts.liveCalls = number(row.live_calls);
+      counts.noAnswerCalls = number(row.no_answer_calls);
+    }
+    tally(String(row.owner), String(row.day), counts);
+  }
   for (const row of followUps) tally(String(row.owner), String(row.day), { followUps: number(row.total) });
   for (const row of firstProposals(proposals as { owner: string; day: string; item: string }[])) tally(row.owner, row.day, { proposals: 1 });
 }
@@ -106,7 +128,8 @@ export async function loadReportRecords(db: D1Database, scope: ReportScope, metr
       WHERE o.workspace_id=? AND o.archived=0 AND date(o.proposal_at,?) BETWEEN ? AND ?${owner('o.owner')}${source} ORDER BY 3 DESC`, scope.workspaceId, from, to, ...owners, zone, zone, scope.workspaceId, zone, from, to, ...owners) as (ReportRecord & { item: string; day: string })[];
     return firstProposals(found).map(({ key, date, rep, lead, detail }) => ({ key, date, rep, lead, detail })).sort((a, b) => b.date.localeCompare(a.date));
   }
-  const types = { calls: ['call', 'callback'], emails: ['email'], meetings: ['meeting'] }[metric];
+  const types = metric === 'emails' ? ['email'] : metric === 'meetings' ? ['meeting'] : ['call', 'callback'];
+  const outcomeFilter = metric === 'liveCalls' ? ` AND ${liveCall}` : metric === 'noAnswerCalls' ? ` AND ${noAnswerCall}` : '';
   return rows(`SELECT a.uid key,substr(a.occurred_at,1,10) date,a.owner rep,a.lead lead,a.detail detail FROM activities a LEFT JOIN companies c INDEXED BY idx_companies_id ON c.id=a.company_id
-    WHERE a.workspace_id=? AND ${completedActivity} AND LOWER(a.type) IN (${types.map(() => '?').join(',')}) AND a.occurred_at BETWEEN ? AND ?||'~'${owner('a.owner')}${source} ORDER BY a.occurred_at DESC`, scope.workspaceId, ...types, from, to, ...owners);
+    WHERE a.workspace_id=? AND ${completedActivity} AND LOWER(a.type) IN (${types.map(() => '?').join(',')}) AND a.occurred_at BETWEEN ? AND ?||'~'${owner('a.owner')}${source}${outcomeFilter} ORDER BY a.occurred_at DESC`, scope.workspaceId, ...types, from, to, ...owners);
 }
